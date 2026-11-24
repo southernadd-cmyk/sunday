@@ -8,7 +8,7 @@ Three.js stages your decisions. Cards, rather than real-time movement, decide wh
 
 ## Play
 
-Open the [playable prototype](https://sunday-saltmere.adamclement00.chatgpt.site). The hosted copy is private to its owner initially.
+Public hosting is configured for [SUNDAY on GitHub Pages](https://southernadd-cmyk.github.io/sunday/). The separate [ChatGPT preview](https://sunday-saltmere.adamclement00.chatgpt.site) is private to its owner.
 
 1. Start a cup run. Read the match's comeback target and kick off.
 2. Play cards to raise your scoring chance. The number at the top right costs **legs**.
@@ -39,6 +39,12 @@ npm run preview
 ```
 
 The production output is `dist/`, with relative asset paths for static hosting. No CDN, backend, account, paid asset, external font request or API key is required. Serve the directory over HTTP; ES modules do not support opening `index.html` directly with `file://`.
+
+## GitHub Pages
+
+The single **Check and publish SUNDAY** workflow tests and builds each code push once, then publishes that exact `dist/` artifact from `main`. Pull requests run the checks without deployment. Markdown-only changes skip the workflow. It can also be run manually from Actions.
+
+GitHub requires one-time activation under **Settings → Pages → Build and deployment → Source → GitHub Actions**. After activation, rerun the failed deployment job or run the workflow manually. No custom domain or repository secrets are needed.
 
 ## Prototype scope
 
