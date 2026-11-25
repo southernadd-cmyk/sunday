@@ -36,6 +36,11 @@ if(process.argv[2]==='aggregate'){
    console.log([id,(t.points/t.games).toFixed(3),[t.wins,t.draws,t.losses].join('-'),t.gf+'-'+t.ga,t.shots,t.passes,t.tackles,t.interceptions].join(' | '));
   }
  }
+ const legacy=result.variants.legacy.freeKicks,compact=result.variants.compact.freeKicks;
+ assert.ok(legacy.releasedPasses>0&&compact.releasedPasses>0,'Both variants need real free-kick passes');
+ const oldRate=legacy.completedPasses/legacy.releasedPasses,newRate=compact.completedPasses/compact.releasedPasses;
+ console.log('FREE_KICK_COMPLETION '+JSON.stringify({legacy:oldRate,compact:newRate}));
+ assert.ok(newRate>=oldRate,'Revised free kicks must at least match legacy completion rate');
 }else{
  const {createSoccerMatch}=await import('../../construct/scripts/engine.js');
  const seed=Number(process.argv[2]);assert.ok(seeds.includes(seed));
