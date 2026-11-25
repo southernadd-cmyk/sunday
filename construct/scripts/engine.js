@@ -102,46 +102,54 @@ export class Run{
  }
  normalise(order){
   if(this.phase!=='planning'||!order||!['run','pass','call','one-two','shot'].includes(order.kind))return {error:'Choose a run, a teammate or a corner of the goal.'};
-  const player=this.state.actors[0],owner=this.state.ballOwner,holder=this.state.actors[owner];
+  const actor=order.actor??0,owner=this.state.ballOwner,holder=this.state.actors[owner];
+  if(!Number.isInteger(actor)||actor<0||actor>6)return {error:'Select one of your outfield players.'};
+  const player=this.state.actors[actor],support={};
+  for(const [id,points] of Object.entries(order.support||{})){
+   const i=Number(id);if(Number.isInteger(i)&&i>=0&&i<=6&&i!==actor&&Array.isArray(points)){
+    const path=route(this.state.actors[i],points,this.runRange);if(path.length>1)support[i]=path;
+   }
+  }
   if(order.kind==='shot'){
-   if(owner!==0)return {error:'Call for the ball before shooting.'};
+   if(owner!==actor)return {error:'Select the ball carrier before shooting.'};
    if(!Number.isFinite(order.target?.x))return {error:'Pick a corner of the goal.'};
    const target={x:clamp(order.target.x,GOAL.left,GOAL.right),z:GOAL.z-1};
    if(distance(player,target)>this.shotRange)return {error:`Too far out. Get within ${this.shotRange}m of goal.`};
    if(order.chip&&!this.buffs.chip)return {error:'You have not learned the cheeky dink yet.'};
-   return {kind:'shot',target,chip:!!order.chip,path:[{x:player.x,z:player.z}]};
+   return {kind:'shot',actor,support,target,chip:!!order.chip,path:[{x:player.x,z:player.z}]};
   }
   const burst=!!order.burst;
   if(burst&&this.state.bursts<1)return {error:'No sprints left in this attack.'};
   if(order.kind==='one-two'){
    const ally=this.state.actors[order.ally];
-   if(owner!==0)return {error:'Call for the ball before starting a one-two.'};
-   if(!Number.isInteger(order.ally)||order.ally<1||order.ally>6||!ally)return {error:'Pick one of your red shirts.'};
+   if(owner!==actor)return {error:'Select the ball carrier before starting a one-two.'};
+   if(!Number.isInteger(order.ally)||order.ally<0||order.ally>6||order.ally===actor||!ally)return {error:'Pick one of your red shirts.'};
    if(this.state.passes<1)return {error:'No one-twos left in this attack.'};
    if(distance(player,ally)>29)return {error:'He is too far away to hear you.'};
-   if(!order.path?.length)return this.normalise(this.suggestOneTwo(order.ally,{burst}));
+   if(!order.path?.length){const suggested=this.suggestOneTwo(order.ally,{burst,actor,support:order.support});return suggested?this.normalise(suggested):{error:'No return run available.'};}
   }
   if(order.kind==='pass'){
-   if(!Number.isInteger(order.ally)||order.ally<1||order.ally>6||order.ally===owner)return {error:'Pick another red shirt to pass to.'};
+   if(!Number.isInteger(order.ally)||order.ally<0||order.ally>6||order.ally===owner)return {error:'Pick another red shirt to pass to.'};
    if(distance(holder,this.state.actors[order.ally])>PASS_RANGE)return {error:`That pass is too far. Find a teammate within ${PASS_RANGE}m.`};
   }
   if(order.kind==='call'){
-   if(owner===0)return {error:'You already have the ball.'};
+   if(owner===actor)return {error:'This player already has the ball.'};
    if(distance(holder,player)>PASS_RANGE)return {error:'Move closer before calling for the ball.'};
   }
   const budget=this.runRange+(burst?7:0)+(order.kind==='one-two'?2:0),path=route(player,order.path,budget);
-  if(path.length<2&&!['pass','call'].includes(order.kind))return {error:'Click the grass to choose your run.'};
+  if(path.length<2&&!['pass','call'].includes(order.kind)&&!(order.kind==='run'&&Object.keys(support).length))return {error:'Click the grass to choose your run.'};
   if(order.kind==='call'&&distance(holder,along(path,budget*.8))>PASS_RANGE)return {error:'That return run is too far from the ball. Choose a closer spot.'};
-  return {kind:order.kind,path,budget,burst:burst&&path.length>1,ally:order.ally};
+  return {kind:order.kind,actor,support,path,budget,burst:burst&&path.length>1,ally:order.ally};
  }
- suggestOneTwo(ally,{burst=false}={}){
-  const player=this.state.actors[0],budget=this.runRange+(burst?7:0)+2;
+ suggestOneTwo(ally,{burst=false,actor=0,support={}}={}){
+  if(!Number.isInteger(actor)||actor<0||actor>6||!Number.isInteger(ally)||ally<0||ally>6||ally===actor||this.state.ballOwner!==actor)return null;
+  const player=this.state.actors[actor],budget=this.runRange+(burst?7:0)+2;
   let best=null,score=-Infinity;
   for(const angle of [0,-.35,.35,-.7,.7,-1.05,1.05,-1.5,1.5,Math.PI]){
    const end={x:player.x+Math.sin(angle)*budget,z:player.z-Math.cos(angle)*budget};
    for(const bend of [0,-1,1]){
     const path=bend?[{x:player.x+bend*budget*.35,z:player.z-budget*.25},end]:[end];
-    const order={kind:'one-two',ally,burst,path},p=this.preview(order);
+    const order={kind:'one-two',ally,burst,path,actor,support},p=this.preview(order);
     if(!p.valid)continue;
     const value=(p.type==='move'?10000:0)+(player.z-p.end.z)*3-distance(p.end,{x:0,z:GOAL.z})*.15;
     if(value>score){best=order;score=value;}
@@ -152,27 +160,28 @@ export class Run{
  preview(order){
   const clean=this.normalise(order);if(clean.error)return {valid:false,error:clean.error};
   const r=this.simulate(clean,false);
-  return {valid:true,order:clean,type:r.type,hit:r.hit,point:r.point,detail:r.detail,end:r.end.actors[0],ball:r.end.ball,ballOwner:r.end.ballOwner,passPoints:r.passPoints};
+  return {valid:true,order:clean,type:r.type,hit:r.hit,point:r.point,detail:r.detail,end:r.end.actors[clean.actor],ball:r.end.ball,ballOwner:r.end.ballOwner,passPoints:r.passPoints};
  }
  simulate(order,record=false){
-  const start=this.state,positions=start.actors.map(a=>({...a})),origin={...start.actors[0]},end=clone(start);
+  const start=this.state,actor=order.actor??0,positions=start.actors.map(a=>({...a})),origin={...start.actors[actor]},end=clone(start);
   const frames=record?new Float32Array((STEPS+1)*STRIDE):null;
   let count=0,type='move',detail='',hit=null,point=null,ball={...start.ball},owner=start.ballOwner;
   const pathLength=order.kind==='shot'?0:routeLength(order.path),travelTime=order.kind==='shot'?distance(start.ball,order.target)/(order.chip?27:38):BEAT;
   const moving=order.kind!=='shot',foot=p=>({x:p.x+.5,z:p.z-1,y:.6});
-  const firstPass=order.kind==='one-two'?foot(lerp(start.actors[order.ally],this.intents[order.ally],.3)):null;
+  const positionAt=(id,f)=>order.support?.[id]?along(order.support[id],this.runRange*f):lerp(start.actors[id],this.intents[id],f);
+  const firstPass=order.kind==='one-two'?foot(positionAt(order.ally,.3)):null;
   const returnPoint=['one-two','call'].includes(order.kind)?foot(along(order.path,order.budget*.8)):null;
   let passTime=0,passTarget=null;
   if(order.kind==='pass'){
    passTime=distance(start.ball,foot(start.actors[order.ally]))/28;
-   for(let i=0;i<4;i++){passTarget=foot(lerp(start.actors[order.ally],this.intents[order.ally],Math.min(1,passTime/BEAT)));passTime=distance(start.ball,passTarget)/28;}
+   for(let i=0;i<4;i++){passTarget=foot(positionAt(order.ally,Math.min(1,passTime/BEAT)));passTime=distance(start.ball,passTarget)/28;}
   }
-  const callStart=order.kind==='call'?foot(lerp(start.actors[start.ballOwner],this.intents[start.ballOwner],.2)):null;
+  const callStart=order.kind==='call'?foot(positionAt(start.ballOwner,.2)):null;
   const passPoints=order.kind==='pass'?[start.ball,passTarget]:order.kind==='call'?[callStart,returnPoint]:order.kind==='one-two'?[start.ball,firstPass,returnPoint]:null;
   for(let step=0;step<=STEPS;step++){
    const f=step/STEPS,time=f*BEAT;
-   for(let i=0;i<ACTORS;i++){const a=start.actors[i],intent=this.intents[i];positions[i].x=a.x+(intent.x-a.x)*f;positions[i].z=a.z+(intent.z-a.z)*f;}
-   if(moving)Object.assign(positions[0],along(order.path,Math.min(pathLength,order.budget*f)));
+   for(let i=0;i<ACTORS;i++)Object.assign(positions[i],positionAt(i,f));
+   Object.assign(positions[actor],moving?along(order.path,Math.min(pathLength,order.budget*f)):origin);
    let inFlight=false;
    if(order.kind==='shot'){
     const progress=Math.min(1,time/travelTime);ball={...lerp(start.ball,order.target,progress),y:.6+(order.chip?Math.sin(progress*Math.PI)*7:Math.sin(progress*Math.PI)*.7)};
@@ -182,7 +191,7 @@ export class Run{
     if(time<passTime){ball={...lerp(start.ball,passTarget,time/passTime),y:.6};inFlight=true;}else{owner=order.ally;ball=foot(positions[owner]);}
    }else if(order.kind==='call'&&f<.8){
     if(f<.2)ball=foot(positions[owner]);else{ball={...lerp(callStart,returnPoint,(f-.2)/.6),y:.6};inFlight=true;}
-   }else{if(['one-two','call'].includes(order.kind))owner=0;ball=foot(positions[owner]);}
+   }else{if(['one-two','call'].includes(order.kind))owner=actor;ball=foot(positions[owner]);}
    if(step>0){
     for(let i=7;i<=14;i++){
      if(i!==14&&!positions[i].active)continue;
@@ -198,7 +207,7 @@ export class Run{
    count++;if(type!=='move')break;
   }
   end.actors=positions;end.ball=ball;end.ballOwner=owner;end.beats--;
-  if(moving){const delta={x:positions[0].x-origin.x,z:positions[0].z-origin.z},length=Math.hypot(delta.x,delta.z)||1;end.lastMove={x:delta.x/length,z:delta.z/length};if(order.burst)end.bursts--;if(order.kind==='one-two')end.passes--;}
+  if(moving){const delta={x:positions[actor].x-origin.x,z:positions[actor].z-origin.z},length=Math.hypot(delta.x,delta.z)||1;if(actor===0)end.lastMove={x:delta.x/length,z:delta.z/length};if(order.burst)end.bursts--;if(order.kind==='one-two')end.passes--;}
   if(type==='move'&&end.beats<=0){type='whistle';detail='The chance has gone. Use a sprint or a one-two to get there sooner.';}
   return {type,detail,hit,point,end,frames,count,duration:(count-1)/STEPS*BEAT,order,passPoints};
  }
@@ -209,7 +218,7 @@ export class Run{
   if(r.type==='goal'){this.goals++;this.bank+=20;this.phase='goal';this.history.push({name:this.fixture.short,attempt:this.attempt});}
   else if(r.type!=='move'){this.lives--;this.phase='setback';}
   else{this.phase='planning';this.intents=this.makeIntents();}
-  this.message=r.detail||(clean.kind==='one-two'?`${this.state.actors[clean.ally].role.toUpperCase()} gives it back. Now find the finish.`:clean.kind==='pass'?`${this.state.actors[clean.ally].role.toUpperCase()} has the ball. Make a run, call for it, or find another red shirt.`:clean.kind==='call'?'Back at your feet. Find the finish.':this.state.ballOwner!==0?'You are off the ball. Find space, then call for it.':'New positions. New intentions. Look before you go.');
+  this.message=r.detail||(clean.kind==='one-two'?`${this.state.actors[clean.ally].role.toUpperCase()} gives it back. Now find the finish.`:clean.kind==='pass'?`${this.state.actors[clean.ally].role.toUpperCase()} has the ball. Build the next move.`:clean.kind==='call'?'Back at your feet. Find the finish.':this.state.ballOwner!==clean.actor?'Off-ball run complete. Choose your next player.':'New positions. New intentions. Look before you go.');
   this.lastResult={type:r.type,detail:this.message};return r;
  }
  rewind(){

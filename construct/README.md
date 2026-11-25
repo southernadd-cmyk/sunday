@@ -10,29 +10,17 @@ This is a native Construct project, with Sprite, Drawing Canvas and Text objects
 
 ## Play
 
-You remain the striker with the yellow ring when a teammate has possession. Time waits while you plan.
+All seven home outfield players are selectable. Time waits while you plan.
 
-- Tap grass for a run; drag from your striker to bend the route.
-- Tap a teammate's name or sprite for an ordinary pass. He keeps the ball. Add a route before playing to pass and move.
-- Tap **BALL** or **CALL** to get a return pass. Add a route to receive into space.
-- Tap **1–2** for a suggested give-and-go. Press Play immediately, or tap grass to change the return run.
-- Read orange defender intentions and the interception warning. Reach shooting range with the ball, then aim **LEFT** or **RIGHT**.
-- Press **PLAY 2 SECONDS**. Everyone moves together, then the pitch freezes again.
+- Tap a red shirt to select him, then tap grass or drag a run.
+- Select another player to retain the first run and plan a second. All queued runs happen together.
+- With the ball carrier selected, choose PASS or 1–2 and tap a teammate. Control follows possession after an ordinary pass.
+- With an off-ball player selected, CALL requests a pass into his planned run.
+- SHOOT selects the ball carrier; choose a corner. Orange lines show the opposition's intentions, cyan marks show support routes and pass targets.
+- Press PLAY 2s. Everyone moves together, then the pitch freezes again.
+- Tab cycles players; P pass/call, O one-two, Space play, B sprint, R rewind, arrows/WASD run, 1/2 shoot, C learned dink, Escape clears the plan.
 
-| Key | Action |
-| --- | --- |
-| Space | Play the plan |
-| Arrows / WASD | Plan a run |
-| Q / E | Diagonal run |
-| P | Pass to Kev / call back |
-| O | Suggested one-two with Kev |
-| 1 / 2 | Aim at goal; choose kit between fixtures |
-| 3 | Choose the third kit item |
-| B | Sprint |
-| C | Toggle a learned dink |
-| R | Rewind |
-| Enter | Start / continue |
-| Escape | Clear the plan / close help |
+The full pitch is visible, horizontal on desktop and vertical on narrow screens, with a fixed compact command deck rather than floating action buttons. The build repaints the recreation ground and footballer sprites with original pixel art, preserving the native atlas frame geometry. Run `python3 scripts/refine-construct-art.py` to refresh the editable source art before opening the folder project; the published `.c3p` is packed after this step. This remains an attacking-chance roguelite, not a full two-way match simulation.
 
 Four fixtures, three legs, kit pickups, club upgrades and profile migration are included. Only club progress is saved; refreshing ends an active run. Sound is not included in this first Construct port.
 
