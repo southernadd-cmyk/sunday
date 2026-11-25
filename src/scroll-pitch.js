@@ -23,6 +23,12 @@ export function makeRenderer(canvas){
  let camera=null,prior=new Map();
  function boards(){for(let x of [F.x-3,F.x+F.w]){rect(g,x-camera.x,F.y-camera.y,3,F.h,'#d3c9a4');}for(let y of [F.y-3,F.y+F.h]){rect(g,F.x-camera.x,y-camera.y,(F.w-77)/2,3,'#d3c9a4');rect(g,mid+38.5-camera.x,y-camera.y,(F.w-77)/2,3,'#d3c9a4');}}
  function sprite(p,x,y,angle,walking,frame){const kit=p.team===2?['#e4bc43','#9e762d','#f3dc7c']:p.side===0?['#c8422f','#883023','#f07846']:['#f0e4c4','#aaa790','#fff4d9'];const skin=['#c68a53','#e1af76','#9b623c'][p.id%3],hair=['#302a20','#644729','#382c20'][p.id%3];const dx=Math.sign(Math.cos(angle)),dy=Math.sign(Math.sin(angle)),side=Math.abs(Math.cos(angle))>.55,back=Math.sin(angle)<-.6,stride=walking?(frame%2?1:-1):0;
+ if(p.sliding){
+  // Native slide state, rendered as a low horizontal figure along travel.
+  g.save();g.translate(x,y);g.rotate(angle);
+  const P=(xx,yy,w,h,c)=>rect(g,xx,yy,w,h,c);
+  P(-8,3,17,3,'#394f27');P(-8,-2,6,5,kit[0]);P(-7,-2,5,1,kit[2]);P(-3,-2,5,5,p.side===0?'#e1dcc2':'#244b8f');P(2,-2,6,2,skin);P(2,1,5,2,skin);P(7,-2,3,2,'#242b25');P(6,1,3,2,'#242b25');P(-11,-2,4,4,skin);P(-12,-3,3,5,hair);g.restore();return;
+ }
  const R=(xx,yy,w,h,c)=>rect(g,x+xx,y+yy,w,h,c);
  R(-3,3,10,3,'#394f27');R(1,6,6,1,'#394f27');
  // Feet and legs change stride, with body orientation expressed by shoulder width and face placement.
