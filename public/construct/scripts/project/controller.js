@@ -96,7 +96,7 @@ export class Sunday{
    const result=m.score[0]>m.score[1]?'WIN':m.score[0]<m.score[1]?'DEFEAT':'DRAW';
    this.label('FULL TIME · '+result,x+16*u,y+15*u,w-32*u,36*u,23,C.yellow);
    this.label('A&C '+m.score[0]+'–'+m.score[1]+' '+opponent+'\n'+a.completed+' passes completed · '+a.shots+' shots\n'+(a.tackles+a.interceptions)+' balls won · best chain '+a.bestChain+'\n'+s.results.map(q=>q.join('–')).join(' / '),x+16*u,y+56*u,w-32*u,100*u,14,C.cream);
-   this.button(s.round===2?'NEW CAREER':'DRAFT NEXT BEHAVIOUR',x+16*u,y+h-83*u,w-32*u,34*u,()=>this.autoNext(),true,false,true);
+   this.button(s.round===2?'PLAY AGAIN':'DRAFT NEXT BEHAVIOUR',x+16*u,y+h-83*u,w-32*u,34*u,()=>this.autoNext(),true,false,true);
    this.button('MAIN MENU',x+16*u,y+h-43*u,w-32*u,29*u,()=>this.exitAuto());
   }
  }
@@ -168,11 +168,11 @@ export class Sunday{
   }
   this.label('SUNDAY',x,y,w,64*u,44,C.yellow);this.label('BUILD THE TEAM. WATCH THE FOOTBALL.',x,y+68*u,w,40*u,13,C.cyan);
   if(this.menuPage==='help'){
-   this.label('Choose one behaviour before each match.\nYour team plays automatically.\nStack complementary behaviours over three matches.\nPause or speed up whenever you want.',x,y+115*u,w,100*u,14,C.cream);
+   this.label('Draft one behaviour before each match.\nYour team plays automatically.\nBuild a stronger team over three fixtures.\nPause or change the viewing speed at any time.',x,y+115*u,w,100*u,14,C.cream);
    this.button('BACK',x,y+230*u,w,37*u,()=>{this.menuPage='main';this.refresh();});
   }else{
-   this.button('NEW CAREER',x,y+122*u,w,43*u,()=>this.startAuto(),true,false,true);
-   this.button('HOW TO PLAY',x,y+177*u,w,37*u,()=>{this.menuPage='help';this.refresh();});
+   this.button('START GAME',x,y+122*u,w,43*u,()=>this.startAuto(),true,false,true);
+   this.button('INSTRUCTIONS',x,y+177*u,w,37*u,()=>{this.menuPage='help';this.refresh();});
    this.label('11-a-side football autobattler',x,y+235*u,w,28*u,13,C.cream);
   }
  }

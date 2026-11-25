@@ -51,9 +51,9 @@ test('native Construct package references existing types, scripts, layouts and o
  assert.match(readFileSync(new URL('../public/construct/index.html',import.meta.url),'utf8'),/Scirra Construct/);
 });
 
-test('title opens only the Soccer-JS autoplay career, with no legacy movement controls',async()=>{
- const g=new Sunday(runtime());assert.deepEqual(g.buttons.map(b=>b.label.text),['NEW CAREER','HOW TO PLAY']);
- click(g,'HOW TO PLAY');click(g,'BACK');click(g,'NEW CAREER');assert.equal(g.auto.phase,'draft');
+test('title offers exactly Start Game and Instructions, with no legacy movement controls',async()=>{
+ const g=new Sunday(runtime());assert.deepEqual(g.buttons.map(b=>b.label.text),['START GAME','INSTRUCTIONS']);
+ click(g,'INSTRUCTIONS');click(g,'BACK');click(g,'START GAME');assert.equal(g.auto.phase,'draft');
  const id=g.auto.offers[0];await g.autoChoose(id);assert.deepEqual(g.auto.traits,[id]);assert.equal(g.auto.phase,'match');assert.equal(g.auto.match.upstream,'soccer-js');assert.equal(g.auto.match.actors.length,22);assert.equal(g.actors.filter(a=>a.isVisible).length,22);
  assert.ok(!g.buttons.some(b=>/PLAY 2s|SPRINT|TACKLE|SHOOT/.test(b.label.text)));
  const point=g.point({x:0,z:0}),[clientX,clientY]=g.field.layerToCssPx(point.x,point.y),ev={pointerId:1,button:0,clientX,clientY};
@@ -71,7 +71,7 @@ test('title opens only the Soccer-JS autoplay career, with no legacy movement co
 });
 test('native autoplay controls remain in view on portrait and desktop',async()=>{
  for(const opts of [{},{width:960,height:2000,left:130,top:-600,cssScale:.375}]){
-  const g=new Sunday(runtime(opts));click(g,'NEW CAREER');await g.autoChoose(g.auto.offers[0]);
+  const g=new Sunday(runtime(opts));click(g,'START GAME');await g.autoChoose(g.auto.offers[0]);
   for(const b of g.buttons)assert.ok(b.x>=g.v.left&&b.x+b.w<=g.v.right&&b.y>=g.v.top&&b.y+b.h<=g.v.bottom);
   assert.ok(g.actors.slice(0,22).every(a=>Number.isFinite(a.x)&&Number.isFinite(a.y)&&a.isVisible));
   assert.ok(!g.ring.isVisible);

@@ -1,7 +1,7 @@
 {
   "projectFormatVersion": 1,
   "savedWithRelease": 44000,
-  "name": "SUNDAY — The Next Two Seconds",
+  "name": "SUNDAY",
   "runtime": "c3",
   "useWorker": "no",
   "bundleAddons": false,
