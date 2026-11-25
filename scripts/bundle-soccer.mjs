@@ -145,6 +145,17 @@ outfield=patch(outfield,'const distToGoal = Math.abs(p.x - targetGoalX);', `cons
                     const team = getTeamEntity(p);
                     const pass = p.findBestPassTarget();
                     const shot = distToGoal < field.width*.31 && team && typeof team.canShoot === 'function' ? team.canShoot({x:p.x,y:p.y},p) : null;
+                    const combination=p.level.sundayCombinationDecision?.(p);
+                    if(combination?.action==='shoot'){
+                        p.shotAim=combination.aim;
+                        p.shotHeightBoost=combination.heightSpeed;
+                        p.humanKick={kind:'shoot',heightSpeed:combination.heightSpeed,curveForce:combination.curveForce,speedMul:combination.speedMul};
+                        p.fsm.changeState(PlayerStates.Shoot);return;
+                    }
+                    if(combination?.action==='pass'){
+                        p.passTarget=combination.target;p.passType='short';p.passAim=combination.aim;
+                        p.fsm.changeState(PlayerStates.Pass);return;
+                    }
                     const action = p.level.sundayPossessionDecision(p,{pass,shot,threat});
                     if (action==='shoot' && shot?.ok) {
                         p.shotAim=shot.target;
@@ -157,7 +168,7 @@ outfield=patch(outfield,'const distToGoal = Math.abs(p.x - targetGoalX);', `cons
                     return;
                 }`);
 outfield=patch(outfield,'const kick = computeShootKick(p);', `const kick = computeShootKick(p);
-                        if (isFreekick && p.humanKick?.kind==='shoot' && p.level.sundayPlanDirectFreeKick) {
+                        if ((isFreekick || p.sundayCombinationShot) && p.humanKick?.kind==='shoot' && p.level.sundayPlanDirectFreeKick) {
                             ball.x=p.x;ball.y=p.y;ball.z=0;
                         }`);
 // Use the native slide FSM, but record every launch (including misses)
@@ -191,11 +202,11 @@ fk=patch(fk,'willShoot = freekickShouldShoot(playbook, !!(shotResult && shotResu
 fk=patch(fk,'if (willShoot) {', `if (compact && !isIndirect && sim.sundayFreekickPlan.direct && sim.sundayPlanDirectFreeKick) {
       const planned = sim.sundayPlanDirectFreeKick(taker);
       willShoot = !!planned;
-      if (planned) shotResult = {target:planned.aim,heightSpeed:planned.heightSpeed,routine:planned.routine,curveForce:planned.curveForce};
+      if (planned) shotResult = {target:planned.aim,heightSpeed:planned.heightSpeed,routine:planned.routine,curveForce:planned.curveForce,speedMul:planned.speedMul};
     }
     if (willShoot) {`);
 fk=patch(fk,'taker.fsm.changeState(PlayerStates.Shoot);', `if (shotResult?.routine) {
-        taker.humanKick = {kind:'shoot',heightSpeed:shotResult.heightSpeed,curveForce:shotResult.curveForce};
+        taker.humanKick = {kind:'shoot',heightSpeed:shotResult.heightSpeed,curveForce:shotResult.curveForce,speedMul:shotResult.speedMul};
         taker.sundayDirectRoutine = shotResult.routine;
       }
       taker.fsm.changeState(PlayerStates.Shoot);`);
