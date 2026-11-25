@@ -161,22 +161,22 @@ export function freeKickLayout({width,height,x,y,attackers,defenders,indirect=fa
 // Direct restart planner. Accepts the engine's real flight predictor and
 // evaluates physically reachable goal-line crossings, not guaranteed goals.
 // The goalkeeper affects target preference, never an automatic veto.
-export function planDirectFreeKick({from,goal,wall=[],defenders=[],keeper=null,speed,shooting=65,accuracy=70,predict}){
+export function planDirectFreeKick({from,goal,wall=[],defenders=[],keeper=null,speed,shooting=65,accuracy=70,predict,variedDelivery=true}){
  const distance=Math.hypot(goal.lineX-from.x,(goal.yMin+goal.yMax)/2-from.y);
  if(distance<2||distance>23||!Number.isFinite(speed)||speed<=0)return null;
  const sign=Math.sign(goal.lineX-from.x),mid=(goal.yMin+goal.yMax)/2,span=goal.yMax-goal.yMin;
  const style=[
-  {routine:'driven',heightSpeed:0.35,curveForce:0},
-  {routine:'curled',heightSpeed:1.8,curveForce:sign*2.6},
-  {routine:'curled',heightSpeed:1.8,curveForce:-sign*2.6},
-  ...[7,9,11].map(heightSpeed=>({routine:'dipped',heightSpeed,curveForce:0}))
+  {routine:'driven',heightSpeed:0.35,curveForce:0,speedMul:1},
+  ...[sign,-sign].flatMap(direction=>(variedDelivery?[.76,.90,1]:[1]).map(speedMul=>({routine:'curled',heightSpeed:1.8,curveForce:direction*2.6,speedMul}))),
+  ...(variedDelivery?[.42,.54,.66,.78,1]:[1]).flatMap(speedMul=>[6.5,7,8,9,10,11].map(heightSpeed=>({routine:'dipped',heightSpeed,curveForce:0,speedMul})))
  ];
  let best=null;
  for(const st of style)for(const offset of [-.8,-.45,0,.45,.8]){
   // Curved kicks start slightly outside the final target corridor.
   const aim={x:goal.lineX,y:mid+offset*span*.5-st.curveForce*.22*distance/10};
   const dx=aim.x-from.x,dy=aim.y-from.y,d=Math.hypot(dx,dy);
-  const launch={...from,z:0,vx:dx/d*speed,vy:dy/d*speed,vz:st.heightSpeed,curveForce:st.curveForce};
+  const launchSpeed=speed*st.speedMul;
+  const launch={...from,z:0,vx:dx/d*launchSpeed,vy:dy/d*launchSpeed,vz:st.heightSpeed,curveForce:st.curveForce};
   let prior=from,cross=null,block=false,risk=0;
   for(let i=1;i<=50;i++){
    const t=i*.05,p=predict(launch,t);
@@ -194,7 +194,7 @@ export function planDirectFreeKick({from,goal,wall=[],defenders=[],keeper=null,s
    }
    if(sign*(p.x-goal.lineX)>=0){
     const u=(goal.lineX-prior.x)/(p.x-prior.x||1);
-    cross={y:prior.y+(p.y-prior.y)*u,z:(prior.z||0)+((p.z||0)-(prior.z||0))*u,t};break;
+    cross={y:prior.y+(p.y-prior.y)*u,z:(prior.z||0)+((p.z||0)-(prior.z||0))*u,t,vz:p.vz,arrivalSpeed:Math.hypot(p.vx,p.vy)};break;
    }
    prior=p;
   }
@@ -203,7 +203,11 @@ export function planDirectFreeKick({from,goal,wall=[],defenders=[],keeper=null,s
   const margin=Math.min(cross.y-goal.yMin,goal.yMax-cross.y,goal.height-cross.z);
   const skill=(shooting+accuracy)/200;
   const complexity=st.routine==='driven'?0:st.routine==='curled'?.12:.20;
-  const score=1.4+Math.min(2.6,keeperGap)*.34+Math.min(.9,margin)*.20-risk-distance*.045-complexity*(1.35-skill);
+  // Slower shots give the keeper more reaction time. A descending shot
+  // earns its label only if it actually crosses below the bar on the way down.
+  if(variedDelivery&&st.routine==='dipped'&&!(cross.vz<-.2&&cross.z>.2))continue;
+  const pacePenalty=variedDelivery?Math.max(0,cross.t-.75)*.17+Math.max(0,8-cross.arrivalSpeed)*.035:0;
+  const score=1.4+Math.min(2.6,keeperGap)*.34+Math.min(.9,margin)*.20-risk-distance*.045-complexity*(1.35-skill)-pacePenalty;
   if(!best||score>best.score)best={...st,aim,score,cross};
  }
  // Do not force a shot if the flight geometry is poor.
