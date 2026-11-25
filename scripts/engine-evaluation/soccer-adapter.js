@@ -137,7 +137,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  }
  // Correct five-a-side kickoffs at startup, goals and halftime. Use authored
  // positions instead of eleven-a-side shifted regions. Only the pivot takes it.
- if(format===5){
+ if(attack){
   const reset=sim.resetToKickoff.bind(sim),pin=sim.pinKickoffSpots.bind(sim);
   const arrange=()=>{
    const pins=sim._kickoffPins;if(!pins)return;
