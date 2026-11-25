@@ -138,7 +138,7 @@ export class Sunday{
   this.label('FIVE-A-SIDE  /  ANYTHING GOES',x,y+62*u*k,w,25*u*k,13*k,C.cream,'center');
   if(this.auto?.phase==='loading'){this.label('KICK OFF IN A MOMENT',x,y+120*u*k,w,30*u*k,16*k,C.gold,'center');return;}
   if(this.auto?.phase==='error'){this.label(this.auto.message,x,y+110*u*k,w,30*u*k,13*k,C.red,'center');this.label('TAP TO RETURN',x,y+160*u*k,w,30*u*k,14*k,C.gold,'center');return;}
-  this.label('Football plays itself.\nDrag a power onto a red player or the pitch.\nRelease to unleash it. Stack powers for 10 seconds.',x,y+101*u*k,w,82*u*k,Math.min(13,W/u/28)*k,C.cream,'center');
+  this.label('Football plays itself.\nDrag a power onto a red player or the pitch.\nRelease to unleash it. Stack powers for 10 seconds.\nTap the clock to pause; hold it to quit.',x,y+95*u*k,w,96*u*k,Math.min(13,W/u/28)*k,C.cream,'center');
   this.label('TAP ANYWHERE TO KICK OFF',x,y+199*u*k,w,30*u*k,16*k,C.gold,'center');
   this.label('THE LEISURE CENTRE CUP',x,y+238*u*k,w,20*u*k,11*k,C.muted,'center');
  }
@@ -170,7 +170,7 @@ export class Sunday{
    this.tokenDisc(cx,cy,r-2*u,selected?[.20,.23,.18,1]:[.08,.12,.13,1]);
    if(!selected)this.icon(p,cx-r*.59,cy-r*.59,r*1.18,color);
    if(active)this.rect(cx-r,y+2*r+1*u,2*r*clamp(active.seconds/10,0,1),2*u,p.color);
-   this.label(active?active.seconds.toFixed(1)+'s':spent?'USED':p.name,L+i*cw,y+2*r+3*u,cw,13*u,Math.min(10,cw/u/7),color,'center');
+   this.label(active?active.seconds.toFixed(1)+'s':spent?'USED':p.name,L+i*cw,y+2*r+3*u,cw,13*u,Math.max(8,Math.min(11,cw/u/7)),color,'center');
    this.tokens.push({id:p.id,x:L+i*cw,y:hudY+16*u,w:cw,h:l.cardH,enabled});
   });
   if(armed&&this.drag?.kind==='power'){
