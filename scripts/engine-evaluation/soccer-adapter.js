@@ -121,7 +121,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
    const before=this.players.filter(p=>!p.isSentOff).map(p=>({p,x:p.x,y:p.y}));
    setup(type,sideName,kickingTeam,...rest);
    if(type!=='freekick'){this.sundayFreekickPlan=null;this.sundayFreekickTaker=null;return;}
-   this.sundayFreekickPlan=null;this.sundayFreekickTaker=null;
+   this.sundayFreekickPlan=null;this.sundayFreekickTaker=null;layoff=null;
    const right=this.isSecondHalf()?kickingTeam==='B':kickingTeam==='A';
    const flip=(x,y)=>right?{x,y}:{x:field.width-x,y:field.height-y};
    const bx=this.setPieceX,by=this.setPieceY,ball=flip(bx,by);
@@ -165,6 +165,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
    const from={x:taker.x,y:taker.y};
    const opponents=this.players.filter(p=>p.team!==taker.team&&!p.isSentOff);
    flow.freeKicks.probed++;
+   if(options.testHooks&&options.forceCombination)return null;
    const result=planDirectFreeKick({from,goal,wall:this.freekickWallPlayers||[],defenders:opponents.filter(p=>p.role!=='GK'&&!p.isInWall),keeper:opponents.find(p=>p.role==='GK'),speed:estimateShotGroundSpeed(taker),shooting:taker.effectiveShooting||65,accuracy:taker.effectiveAccuracy||70,predict:predict3D,variedDelivery:options.deliveryRoutines!==false});
    return result;
   };
@@ -180,7 +181,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   if(options.deliveryRoutines!==false)sim.sundayCombinationDecision=function(p){
    if(!layoff||frames>layoff.until||p.team!==layoff.team||this.ball.owner!==p||this.setPieceType)return null;
    const expected=layoff.stage==='first'?layoff.receiver:layoff.taker;
-   if(p!==expected)return null;
+   if(p!==expected){layoff=null;return null;}
    const right=this.isSecondHalf()?p.team==='B':p.team==='A',goal=this.getGoals()[right?'right':'left'];
    const from={x:p.x,y:p.y},opponents=this.players.filter(q=>q.team!==p.team&&!q.isSentOff);
    const shot=planDirectFreeKick({from,goal,defenders:opponents.filter(q=>q.role!=='GK'),keeper:opponents.find(q=>q.role==='GK'),speed:estimateShotGroundSpeed(p),shooting:p.effectiveShooting||65,accuracy:p.effectiveAccuracy||70,predict:predict3D});
@@ -366,7 +367,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   onTackleAttempt({tackler,success,tackleType}){if(!tackler)return;const a=stats[side(tackler.team)];a.tackleAttempts++;if(tackleType==='slide'){a.slideAttempts++;if(success)a.slideWins++;}if(success){a.tackles++;if(tackler.team==='A')gainCharge();event(tackleType==='slide'?'SLIDING TACKLE WON':'BALL WON',tackler.team,'tackle');}},
    onSlideStarted({player}){stats[side(player.team)].slideStarts++;event('SLIDING TACKLE',player.team,'tackle');},
    onFirstTouch({player,fumbled,control,receivedPass}){const a=stats[side(player.team)];a.firstTouches++;a.touchControlSum+=control;if(!fumbled)a.cleanTouches++;if(receivedPass){a.passTouches++;if(!fumbled)a.cleanPassTouches++;}if(fumbled)event('HEAVY TOUCH',player.team,'play');},
-  onShotKicked({team}){flow.shots++;const comboShooter=sim.ball.owner;if(comboShooter?.sundayCombinationShot){const kind=comboShooter.sundayCombinationShot;flow.freeKicks[kind==='return'?'returnShots':'layoffShots']++;directFlight={team,frame:frames,combination:true};comboShooter.sundayCombinationShot=null;}if(lastCompleted&&lastCompleted.to.team===team&&frames-lastCompleted.frame<80)flow.createdShots++;const p=sim.ball.owner||sim.ball.lastKicker;if(p){const right=sim.isSecondHalf()?team==='B':team==='A',dist=Math.abs(p.x-(right?field.width:0))/field.width;flow.shotZones[Math.min(2,Math.floor(dist*3))]++;}stats[side(team)].shots++;event('SHOT!',team,'shot');rocketKick=team==='A'&&state.chips.some(c=>c.id==='rocket'&&c.status==='active');},
+  onShotKicked({team}){flow.shots++;const comboShooter=sim.ball.owner;if(comboShooter?.sundayCombinationShot){const kind=comboShooter.sundayCombinationShot;flow.freeKicks[kind==='return'?'returnShots':'layoffShots']++;directFlight={team,frame:frames+1,combination:true};comboShooter.sundayCombinationShot=null;}if(lastCompleted&&lastCompleted.to.team===team&&frames-lastCompleted.frame<80)flow.createdShots++;const p=sim.ball.owner||sim.ball.lastKicker;if(p){const right=sim.isSecondHalf()?team==='B':team==='A',dist=Math.abs(p.x-(right?field.width:0))/field.width;flow.shotZones[Math.min(2,Math.floor(dist*3))]++;}stats[side(team)].shots++;event('SHOT!',team,'shot');rocketKick=team==='A'&&state.chips.some(c=>c.id==='rocket'&&c.status==='active');},
   onProgressivePass({team}){stats[side(team)].progressive++;},
   onBlock(info){if(info?.team==='A'||info?.team==='B')stats[side(info.team)].blocks++;event('SHOT BLOCKED',info?.team,'save');}
  };
@@ -405,7 +406,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
    else if(wallContact)outcome='shotWallBlocks';
    else if(after&&after.team!==directFlight.team&&after.role==='GK')outcome='shotSaves';
    else if(sim.matchState==='goalkick'||sim.matchState==='throwin'||sim.matchState==='corner')outcome='shotMisses';
-   else if(after||(!sim.ball.isShot&&frames>directFlight.frame)||flow.shots>shotBefore&&!releasedFreeKick)outcome='shotDeflections';
+   else if(after||(!sim.ball.isShot&&frames>directFlight.frame)||flow.shots>shotBefore&&!releasedFreeKick&&frames>directFlight.frame)outcome='shotDeflections';
    else if(frames-directFlight.frame>100||state.finished)outcome='shotUnresolved';
    if(outcome){if(directFlight.combination){if(outcome==='shotGoals')fk.combinationGoals++;state.lastCombinationOutcome=outcome;}else{fk[outcome]++;state.lastFreeKickOutcome=outcome;}directFlight=null;}
   }
