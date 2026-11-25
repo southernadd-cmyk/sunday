@@ -1,6 +1,6 @@
 {
   "name": "sunday-saltmere",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,9 @@
     "build": "vite build --base=./",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.js",
-    "prebuild": "python3 scripts/refine-construct-art.py && python3 scripts/sync-construct-export.py"
+    "prebuild": "node scripts/bundle-soccer.mjs && python3 scripts/refine-construct-art.py && python3 scripts/sync-construct-export.py",
+    "pretest": "node scripts/bundle-soccer.mjs",
+    "predev": "node scripts/bundle-soccer.mjs"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.2.8",

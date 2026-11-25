@@ -1,0 +1,62 @@
+name: External football engine evaluation
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['.github/workflows/engine-evaluation.yml', 'scripts/engine-evaluation/**']
+permissions:
+  contents: read
+jobs:
+  soccer-js:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: haeretici/soccer-js
+          ref: 38970e0dade0865078c9e84bc1ecfd72aaa02fde
+          path: candidates/soccer-js
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          cp scripts/engine-evaluation/soccer.cjs candidates/soccer-js/evaluate.cjs
+          cd candidates/soccer-js
+          node evaluate.cjs
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Bundle Soccer-JS as a render-independent browser module
+        run: |
+          cp scripts/engine-evaluation/soccer-adapter.js candidates/soccer-js/sunday-adapter.js
+          mkdir -p adapter-proof
+          ./node_modules/.bin/esbuild candidates/soccer-js/sunday-adapter.js --bundle --platform=browser --format=esm --outfile=adapter-proof/soccer-adapter.mjs
+          cp candidates/soccer-js/LICENSE adapter-proof/LICENSE
+          cp scripts/engine-evaluation/verify-soccer-adapter.mjs adapter-proof/verify.mjs
+          node adapter-proof/verify.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: soccer-js-adapter-proof
+          path: adapter-proof
+  evofootball:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: Quarkgluonmixture/evofootball-arena
+          ref: 1e28434fd2cab86560321c315763bc720dfaee4b
+          path: candidates/evofootball
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          cp scripts/engine-evaluation/evo.ts candidates/evofootball/scripts/evaluate.ts
+          cd candidates/evofootball
+          npm ci --ignore-scripts --no-audit --no-fund
+          ./node_modules/.bin/tsx scripts/evaluate.ts
