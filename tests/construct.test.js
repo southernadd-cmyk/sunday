@@ -108,3 +108,17 @@ test('desktop camera rotates the pitch and maps input consistently',()=>{
  assert.ok(g.point({x:0,z:-47}).x>g.point({x:0,z:47}).x);
  click(g,'STEP ONTO THE PITCH');g.key({key:'arrowright'});assert.ok(g.order.path[0].z<g.run.state.actors[0].z);
 });
+
+test('defence controls, preview and playback use the same possession rules',()=>{
+ const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.kickoff(false);g.selected=g.run.selection();g.updateActors();g.refresh();
+ assert.ok(g.run.defending);assert.ok(g.run.threat);click(g,'PRESS');assert.ok(g.preview.valid);
+ const p=g.preview,clock=g.run.state.beats;g.play();finish(g);
+ assert.equal(g.run.state.beats,clock-1);assert.equal(g.run.lastResult.type,p.type);
+ assert.equal(g.run.lives,3);
+ g.key({key:'r'});assert.ok(g.run.defending);assert.equal(g.run.state.beats,clock);
+ click(g,'HOLD');assert.ok(g.preview.valid);
+});
+test('goalkeeper is selectable and can distribute possession',()=>{
+ const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.state.ballOwner=15;g.run.state.ball={x:.5,z:44,y:.6};g.run.intents=g.run.makeIntents();g.selected=0;g.refresh();
+ g.select(15);assert.equal(g.selected,15);g.pass(6);assert.ok(g.preview.valid);assert.equal(g.order.actor,15);
+});

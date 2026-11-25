@@ -10,7 +10,7 @@ This is a native Construct project, with Sprite, Drawing Canvas and Text objects
 
 ## Play
 
-All seven home outfield players are selectable. Time waits while you plan.
+All seven home outfield players and the goalkeeper are selectable. Time waits while you plan.
 
 - Tap a red shirt to select him, then tap grass or drag a run.
 - Select another player to retain the first run and plan a second. All queued runs happen together.
@@ -20,7 +20,7 @@ All seven home outfield players are selectable. Time waits while you plan.
 - Press PLAY 2s. Everyone moves together, then the pitch freezes again.
 - Tab cycles players; P pass/call, O one-two, Space play, B sprint, R rewind, arrows/WASD run, 1/2 shoot, C learned dink, Escape clears the plan.
 
-The full pitch is visible, horizontal on desktop and vertical on narrow screens, with a fixed compact command deck rather than floating action buttons. The build repaints the recreation ground and footballer sprites with original pixel art, preserving the native atlas frame geometry. Run `python3 scripts/refine-construct-art.py` to refresh the editable source art before opening the folder project; the published `.c3p` is packed after this step. This remains an attacking-chance roguelite, not a full two-way match simulation.
+The full pitch is visible, horizontal on desktop and vertical on narrow screens, with a fixed compact command deck rather than floating action buttons. The build repaints the recreation ground and footballer sprites with original pixel art, preserving the native atlas frame geometry. Run `python3 scripts/refine-construct-art.py` to refresh the editable source art before opening the folder project; the published `.c3p` is packed after this step. The native game now plays scored two-way mini-matches. Losing possession opens a defensive phase; tackle or intercept to regain it at the same location. Opposition movement, pass and shot intentions are visible. PRESS, COVER and HOLD give quick defensive plans (P/O/H keys). A goal restarts play rather than ending the fixture. Win at full time to earn kit and progress; a defeat or draw after extra time costs one replay. The original browser route retains the older attack-only mode.
 
 Four fixtures, three legs, kit pickups, club upgrades and profile migration are included. Only club progress is saved; refreshing ends an active run. Sound is not included in this first Construct port.
 
