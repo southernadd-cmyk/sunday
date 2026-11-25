@@ -20,6 +20,22 @@ const TRAIT_MODS={
  counter:{COUNTERPRESS_DURATION:5.5,ATTACK_DEPTH_BIAS_REF:12,ATTACK_SUPPORT_INTENSITY:.8},
  shield:{FORMATION_HOLD:.8,DEFEND_DEPTH_BIAS_REF:-7,DEFENSIVE_PRESS_INTENSITY:.55}
 };
+
+// Stances change the underlying AI rather than injecting actions or modifying scores.
+// Values are additive to the drafted behaviour build, with bounded team-local knobs.
+export const HALF_PLANS={
+ balanced:{name:'Keep the plan',detail:'Trust the drafted behaviours; no additional risk.',mods:{}},
+ attack:{name:'Go for it',detail:'More attacking support and forward passes; less defensive cover.',mods:{ATTACK_SUPPORT_INTENSITY:.20,PASS_AGGRESSION:.20,ATTACK_DEPTH_BIAS_REF:5,FORMATION_HOLD:-.18}},
+ protect:{name:'Stay compact',detail:'Deeper, tighter shape; fewer players committed forward.',mods:{FORMATION_HOLD:.25,DEFEND_DEPTH_BIAS_REF:-4,ATTACK_SUPPORT_INTENSITY:-.20,PASS_AGGRESSION:-.14}},
+ press:{name:'Raise the press',detail:'Close opponents harder; sacrifice formation discipline.',mods:{DEFENSIVE_PRESS_INTENSITY:.30,COUNTERPRESS_MAX_SURGE:1,FORMATION_HOLD:-.16}}
+};
+export const TOUCHLINE_CALLS={
+ press:{name:'Press',detail:'More aggressive closing down; less shape.',mods:{DEFENSIVE_PRESS_INTENSITY:.35,COUNTERPRESS_MAX_SURGE:1,FORMATION_HOLD:-.18}},
+ push:{name:'Push up',detail:'More forward support and risky passes.',mods:{ATTACK_SUPPORT_INTENSITY:.22,ATTACK_DEPTH_BIAS_REF:5,PASS_AGGRESSION:.15,FORMATION_HOLD:-.12}},
+ settle:{name:'Settle',detail:'Hold shape and reduce risky passing.',mods:{FORMATION_HOLD:.26,PASS_AGGRESSION:-.25,ATTACK_SUPPORT_INTENSITY:-.16}}
+};
+const bounded=new Set(['SUPPORT_WIDTH','ATTACK_SUPPORT_INTENSITY','PASS_AGGRESSION','FIRST_TOUCH_FUMBLE_BASE','FIRST_TOUCH_FUMBLE_SCALE','DEFENSIVE_PRESS_INTENSITY','FORMATION_HOLD']);
+
 function teamSettings(traits){
  const out=Object.create(upstreamDefaults);
  for(const trait of traits)for(const [key,value] of Object.entries(TRAIT_MODS[trait]||{})){
@@ -31,7 +47,8 @@ function teamSettings(traits){
 }
 export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75){
  // Soccer-JS uses shared Settings; this proof runs one active match at a time.
- const home=teamSettings(traits),away=teamSettings([['shield'],['hunt','touch'],['overlap','rifle']][Math.min(2,Math.max(0,opponent))]);
+ const baseHome=teamSettings(traits),away=teamSettings([['shield'],['hunt','touch'],['overlap','rifle']][Math.min(2,Math.max(0,opponent))]);
+ let home=baseHome;
  Settings.HEADLESS=true;Settings.soundsMuted=true;Settings.TIME_SPEED=1;
  Settings.MATCH_DURATION=duration;Settings.AI.A=home;Settings.AI.B=away;Settings.AI.dynamicStrategyShifting=false;
  Settings.batchConfig={teamA:'England',teamB:'Scotland',formationA:'4-4-2',formationB:'4-3-3'};
@@ -42,7 +59,24 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75){
  await sim.start();sim.active=true;
  const field=Utils.getFieldBounds(),events=[],stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackles:0,interceptions:0,saves:0,blocks:0,possession:0,bestChain:0,progressive:0}));
  let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
- const state={duration,time:0,finished:false,actors:[],ball:{x:0,z:0,y:0},score:[0,0],stats,events,step,upstream:'soccer-js',stepSeconds:SOCCER_STEP};
+ const state={duration,time:0,finished:false,phase:'kickoff',actors:[],ball:{x:0,z:0,y:0},score:[0,0],stats,events,step,upstream:'soccer-js',stepSeconds:SOCCER_STEP,halfPlan:'balanced',halfPlanChosen:false,call:null,callsLeft:2,chooseHalfPlan,callTouchline,tacticalSettings:()=>Object.fromEntries([...bounded,'ATTACK_DEPTH_BIAS_REF','DEFEND_DEPTH_BIAS_REF','COUNTERPRESS_MAX_SURGE'].map(k=>[k,home[k]]))};
+ function rebuildHome(){
+  const next=Object.create(baseHome);
+  for(const mods of [HALF_PLANS[state.halfPlan].mods,state.call?TOUCHLINE_CALLS[state.call.id].mods:{}])for(const [key,delta] of Object.entries(mods)){
+   const value=next[key]+delta;next[key]=bounded.has(key)?clamp(value,0,1):value;
+  }
+  home=next;Settings.AI.A=home;
+ }
+ function chooseHalfPlan(id){
+  if(state.phase!=='halftime'||state.halfPlanChosen||!Object.hasOwn(HALF_PLANS,id))return false;
+  state.halfPlan=id;state.halfPlanChosen=true;state.call=null;state.callsLeft=2;rebuildHome();
+  event('SECOND HALF · '+HALF_PLANS[id].name.toUpperCase(),'A','tactic');return true;
+ }
+ function callTouchline(id){
+  if(state.phase!=='play'||state.finished||state.callsLeft<=0||state.call||!Object.hasOwn(TOUCHLINE_CALLS,id))return false;
+  state.callsLeft--;state.call={id,until:Math.min(state.time<duration/2?duration/2:duration,state.time+duration*10/90)};rebuildHome();
+  event('TOUCHLINE · '+TOUCHLINE_CALLS[id].name.toUpperCase(),'A','tactic');return true;
+ }
  function event(text,team,kind='play'){events.unshift({time:state.time,text,side:team==='A'||team==='B'?side(team):-1,kind});if(events.length>8)events.pop();}
  sim._telemetry={
   onTackleAttempt({tackler,success}){if(success&&tackler){stats[side(tackler.team)].tackles++;event('BALL WON',tackler.team,'tackle');}},
@@ -55,13 +89,14 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75){
   state.actors=sim.players.map((p,i)=>({id:i,...point(p),team:p.role==='GK'?2:side(p.team),side:side(p.team),role:p.role,visible:!p.isSentOff,frame:Math.floor(frames/3)%2}));
   state.ball={...point(sim.ball),y:Math.max(0,sim.ball.z||0)+.4};
   state.score=[sim.scoreA,sim.scoreB];state.time=clamp(sim.matchTimer/5400*duration,0,duration);
-  state.finished=sim.matchState==='fulltime';
+  state.phase=sim.matchState;state.finished=state.phase==='fulltime';
  }
  function step(){
   if(state.finished)return;
   // Reapply team-local knobs before the tick; upstream owns every decision.
   Settings.AI.A=home;Settings.AI.B=away;Time.deltaTime=SOCCER_STEP;
   const before=sim.ball.owner,beforeShot=sim.ball.isShot;sim.updateAll();frames++;snapshot();
+  if(state.call&&(state.time>=state.call.until||state.phase==='halftime'||state.finished)){state.call=null;rebuildHome();}
   const after=sim.ball.owner;
   // Count a single actual pass launch, not a transient AI state. A pending
   // flight may span many ticks and an attempted pass can be aborted before contact.

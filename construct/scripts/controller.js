@@ -1,5 +1,5 @@
 // SUNDAY: native Construct autoplay presentation. Match logic stays in engine.js.
-import {createSoccerMatch,AUTO_TRAITS,SOCCER_STEP} from './engine.js';
+import {createSoccerMatch,AUTO_TRAITS,SOCCER_STEP,HALF_PLANS,TOUCHLINE_CALLS} from './engine.js';
 const SIM_DURATION=300,BASE_PLAYBACK=4;
 const C={navy:[.09,.15,.25,.96],yellow:[1,.88,.35,1],cream:[.96,.96,.82,1],cyan:[.64,.9,.87,1],orange:[1,.66,.36,.8],red:[1,.39,.3,1],clear:[0,0,0,0]};
 const rgb=c=>c.slice(0,3);
@@ -34,16 +34,37 @@ export class Sunday{
   try{
    const traits=[...s.traits,id],match=await createSoccerMatch((s.seed+s.round*7919)>>>0,traits,s.round,SIM_DURATION);
    if(this.auto!==s)return;
-   s.traits=traits;s.match=match;s.phase='match';s.paused=false;s.acc=0;s.hud=0;s.last=performance.now();this.drawAuto();this.refresh();
+   s.traits=traits;s.match=match;s.halfSeen=false;s.phase='match';s.paused=false;s.acc=0;s.hud=0;s.last=performance.now();this.drawAuto();this.refresh();
   }catch(error){if(this.auto!==s)return;s.phase='draft';s.error='Could not start match. Choose again.';console.error('Soccer-JS startup:',error);this.refresh();}
  }
  advanceAuto(dt){
   const s=this.auto;if(!s||s.phase!=='match'||s.paused)return;
   s.acc+=Math.max(0,dt)*s.speed*BASE_PLAYBACK;
-  while(s.acc>=SOCCER_STEP&&!s.match.finished){s.match.step();s.acc-=SOCCER_STEP;}
+  while(s.acc>=SOCCER_STEP&&!s.match.finished){s.match.step();s.acc-=SOCCER_STEP;
+   if(s.match.phase==='halftime'&&!s.halfSeen){s.halfSeen=true;s.phase='halftime';s.acc=0;break;}
+  }
   this.drawAuto();s.hud+=dt;
+  if(s.phase==='halftime'){this.refresh();return;}
   if(s.match.finished){s.results.push([...s.match.score]);s.phase='result';this.refresh();}
   else if(s.hud>=.2){s.hud=0;this.refresh();}
+ }
+ resumeHalf(id){
+  const s=this.auto;if(!s||s.phase!=='halftime'||!s.match.chooseHalfPlan(id))return;
+  s.phase='match';s.paused=false;s.acc=0;s.last=performance.now();s.hud=0;this.refresh();
+ }
+ callTouchline(id){const s=this.auto;if(s?.phase==='match'&&s.match.callTouchline(id))this.refresh();}
+ halfUi(){
+  const s=this.auto,m=s.match,{left:L,top:T,width:W,height:H}=this.v,original=this.u,u=Math.min(original,H/430);this.u=u;
+  this.rect(L,T,W,H,[.055,.105,.16,.97],null);
+  const w=Math.min(540*u,W-24*u),x=L+(W-w)/2,y=T+Math.max(8*u,(H-430*u)/2),a=m.stats[0],b=m.stats[1],pos=a.possession+b.possession;
+  this.label('HALF TIME · '+m.score.join('–'),x,y,w,37*u,25,C.yellow,'center');
+  this.label('ANCHOR & CROWN   /   '+['RAILWAY','MUNICIPAL','DOG & DUCK'][s.round],x,y+39*u,w,24*u,12,C.cyan,'center');
+  const stats=[['Possession',pos?Math.round(100*a.possession/pos)+'%':'–',pos?Math.round(100*b.possession/pos)+'%':'–'],['Shots',a.shots,b.shots],['Passes completed',a.completed,b.completed],['Tackles + interceptions',a.tackles+a.interceptions,b.tackles+b.interceptions]];
+  stats.forEach(([label,home,away],i)=>{const yy=y+(68+21*i)*u;this.label(String(home),x,yy,60*u,20*u,13,C.cream,'center');this.label(label,x+60*u,yy,w-120*u,20*u,12,C.cyan,'center');this.label(String(away),x+w-60*u,yy,60*u,20*u,13,C.cream,'center');});
+  const verdict=m.score[0]<m.score[1]?'Behind: create more chances, but beware the counter.':m.score[0]>m.score[1]?'Ahead: protect the lead, or keep attacking?':a.shots<b.shots?'Level, but giving up chances. Change the balance?':'Level at the break. How do you want to play?';
+  this.label(verdict,x,y+157*u,w,31*u,12,C.yellow,'center');
+  this.label('SECOND-HALF GAME PLAN · 2 TOUCHLINE CALLS REFILLED',x,y+190*u,w,24*u,11,C.cyan,'center');
+  Object.entries(HALF_PLANS).forEach(([id,g],i)=>{const yy=y+(218+i*48)*u;this.button(g.name.toUpperCase(),x,yy,w,26*u,()=>this.resumeHalf(id),true,false,id==='balanced');this.label(g.detail,x+3*u,yy+26*u,w-6*u,22*u,11,C.cream,'center');});this.u=original;
  }
  autoNext(){
   const s=this.auto;if(!s||s.phase!=='result')return;
@@ -62,6 +83,7 @@ export class Sunday{
  autoUi(){
   const s=this.auto,m=s.match,{left:L,top:T,right:R,bottom:B,width:W,height:H}=this.v,u=this.u;
   const opponent=['RAILWAY','MUNICIPAL','DOG & DUCK'][s.round];
+  if(s.phase==='halftime'){this.halfUi();return;}
   if(s.phase==='loading'){
    this.rect(L,T,W,H,[.055,.105,.16,1],null);this.label('PREPARING MATCH',L+20*u,T+H*.44,W-40*u,42*u,24,C.yellow,'center');return;
   }
@@ -79,8 +101,8 @@ export class Sunday{
   this.label('A&C '+m.score[0]+'–'+m.score[1]+' '+opponent,L+22*u,T+17*u,W-106*u,18*u,16,C.cream);
   this.label('MATCH '+(s.round+1)+'/3 · '+clock,L+22*u,T+36*u,W-106*u,16*u,11,C.yellow);
   this.button('MENU',R-78*u,T+18*u,64*u,30*u,()=>this.exitAuto());
-  const wide=this.landscape,x=wide?R-250*u:L+12*u,y=wide?T+66*u:B-210*u,pw=wide?238*u:W-24*u,inner=pw-20*u,bw=(inner-9*u)/4;
-  this.rect(x,y,pw,wide?Math.min(410*u,H-75*u):198*u,C.navy,null);
+  const wide=this.landscape,x=wide?R-250*u:L+12*u,y=wide?T+66*u:B-267*u,pw=wide?238*u:W-24*u,inner=pw-20*u,bw=(inner-9*u)/4;
+  this.rect(x,y,pw,wide?Math.min(474*u,H-75*u):255*u,C.navy,null);
   this.label(s.paused?'PAUSED':'LIVE FOOTBALL',x+10*u,y+9*u,inner,20*u,14,C.yellow);
   const rowY=y+34*u;this.button(s.paused?'PLAY':'PAUSE',x+10*u,rowY,bw,30*u,()=>{s.paused=!s.paused;this.refresh();},s.phase==='match',false,true);
   [1,2,4].forEach((speed,i)=>this.button(speed+'×',x+10*u+(i+1)*(bw+3*u),rowY,bw,30*u,()=>{s.speed=speed;this.refresh();},s.phase==='match',s.speed===speed));
@@ -89,8 +111,15 @@ export class Sunday{
   this.label('OPP     '+b.completed+' PASSES / '+b.shots+' SHOTS / '+(b.tackles+b.interceptions)+' WINS',x+10*u,y+100*u,inner,25*u,11,C.cream);
   this.label('BUILD: '+s.traits.map(id=>AUTO_TRAITS[id].name).join(' + '),x+10*u,y+126*u,inner,wide?50*u:27*u,11,C.cyan);
   const ev=m.events[0];
-  this.label(ev?(ev.side===0?'A&C · ':ev.side===1?'OPP · ':'')+ev.text:'WATCH THE PLAY',x+10*u,y+(wide?180:157)*u,inner,30*u,14,ev?.kind==='goal'?C.yellow:C.cream);
-  if(wide)m.events.slice(1,5).forEach((ev,i)=>this.label((ev.side===0?'A&C ':ev.side===1?'OPP ':'')+ev.text,x+10*u,y+(216+i*32)*u,inner,28*u,11,C.cyan));
+  this.label(ev?(ev.side===0?'A&C · ':ev.side===1?'OPP · ':'')+ev.text:'WATCH THE PLAY',x+10*u,y+(wide?171:153)*u,inner,30*u,14,ev?.kind==='goal'?C.yellow:C.cream);
+  if(s.phase==='match'){
+   const call=m.call,can=m.phase==='play'&&!call&&m.callsLeft>0;
+   const status=call?TOUCHLINE_CALLS[call.id].name.toUpperCase()+' · '+Math.ceil((call.until-m.time)/m.duration*90)+' MIN LEFT':m.callsLeft+' CALLS LEFT THIS HALF';
+   this.label(status,x+10*u,y+(wide?208:185)*u,inner,20*u,11,C.yellow);
+   const cw=(inner-6*u)/3;
+   Object.entries(TOUCHLINE_CALLS).forEach(([id,g],i)=>this.button(g.name.toUpperCase(),x+10*u+i*(cw+3*u),y+(wide?231:207)*u,cw,31*u,()=>this.callTouchline(id),can,call?.id===id));
+   if(wide){this.label(call?TOUCHLINE_CALLS[call.id].detail:'10 match minutes per call. Choose the moment.',x+10*u,y+267*u,inner,42*u,11,C.cyan);m.events.slice(1,4).forEach((e,i)=>this.label((e.side===0?'A&C ':e.side===1?'OPP ':'')+e.text,x+10*u,y+(312+i*28)*u,inner,25*u,11,C.cyan));}
+  }
   if(s.phase==='result'){
    this.buttons=[];const {x,y,w,h,u}=this.panel(460,260);
    const result=m.score[0]>m.score[1]?'WIN':m.score[0]<m.score[1]?'DEFEAT':'DRAW';
@@ -108,12 +137,12 @@ export class Sunday{
   this.landscape=W/u>=740&&W/H>=1.25;
   const fieldWidth=W-(this.landscape?258*u:0);
   this.cx=L+fieldWidth/2;
-  this.scale=Math.max(.1,this.landscape?Math.min((fieldWidth-16*u)/110,(H-72*u)/88):Math.min((W-8*u)/88,(H-(278)*u)/110));
+  this.scale=Math.max(.1,this.landscape?Math.min((fieldWidth-16*u)/110,(H-72*u)/88):Math.min((W-8*u)/88,(H-(335)*u)/110));
   if(this.landscape){
    this.pitchRight=this.cx+55*this.scale;this.pitchTop=T+62*u+(H-72*u-88*this.scale)/2;
    Object.assign(this.pitch,{x:this.pitchRight,y:this.pitchTop,width:88*this.scale,height:110*this.scale,angle:Math.PI/2});
   }else{
-   this.top=T+62*u+6*this.scale+(H-(278)*u-110*this.scale)/2;
+   this.top=T+62*u+6*this.scale+(H-(335)*u-110*this.scale)/2;
    Object.assign(this.pitch,{x:this.cx-44*this.scale,y:this.top-6*this.scale,width:88*this.scale,height:110*this.scale,angle:0});
   }
   for(const canvas of [this.plans,this.canvas]){canvas.x=this.v.left;canvas.y=this.v.top;canvas.width=this.v.width;canvas.height=this.v.height;}
@@ -150,7 +179,7 @@ export class Sunday{
   if(!this.v)return;
   this.canvas.clearCanvas(C.clear);this.plans.clearCanvas(C.clear);this.ring.isVisible=false;this.ghost.isVisible=false;this.buttons=[];this.labelCount=0;
   for(const p of this.pickups)p.isVisible=false;
-  const visible=!!this.auto?.match&&['match','result'].includes(this.auto.phase);
+  const visible=!!this.auto?.match&&['match','halftime','result'].includes(this.auto.phase);
   for(let i=0;i<this.actors.length;i++)this.actors[i].isVisible=visible&&!!this.auto.match.actors[i]&&this.auto.match.actors[i].visible!==false;this.ball.isVisible=visible;this.pitch.isVisible=visible;
   if(this.auto)this.autoUi();else this.introUi();
   for(let i=this.labelCount;i<this.labels.length;i++)this.labels[i].isVisible=false;
@@ -168,7 +197,7 @@ export class Sunday{
   }
   this.label('SUNDAY',x,y,w,64*u,44,C.yellow);this.label('BUILD THE TEAM. WATCH THE FOOTBALL.',x,y+68*u,w,40*u,13,C.cyan);
   if(this.menuPage==='help'){
-   this.label('Draft one behaviour before each match.\nYour team plays automatically.\nBuild a stronger team over three fixtures.\nPause or change the viewing speed at any time.',x,y+115*u,w,100*u,14,C.cream);
+   this.label('Draft a behaviour before each match.\nUse two touchline calls per half.\nChoose your game plan at half-time.\nBuild your team across three fixtures.',x,y+115*u,w,100*u,14,C.cream);
    this.button('BACK',x,y+230*u,w,37*u,()=>{this.menuPage='main';this.refresh();});
   }else{
    this.button('START GAME',x,y+122*u,w,43*u,()=>this.startAuto(),true,false,true);

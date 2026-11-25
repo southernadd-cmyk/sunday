@@ -2,3 +2,5 @@
 export {AUTO_TRAITS} from '../../src/engine.js';
 export const SOCCER_STEP=.05;
 export async function createSoccerMatch(){throw new Error('Soccer-JS bundle not generated: run npm ci and npm run prebuild');}
+
+export const HALF_PLANS={},TOUCHLINE_CALLS={};
