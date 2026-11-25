@@ -117,7 +117,7 @@ export class Pitch {
     this.tick = this.tick.bind(this);
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(host);
-    this.onVisibility = () => { this.active = !document.hidden; if (this.active) { this.lastTime = performance.now(); this.schedule(); } };
+    this.onVisibility = () => { this.active = !document.hidden; if (this.active) { this.lastRenderTime = performance.now(); this.schedule(); } };
     document.addEventListener('visibilitychange', this.onVisibility);
     this.resize();
     this.schedule();
@@ -314,7 +314,8 @@ export class Pitch {
     this.frame=null;
     if(!this.active)return;
     if(now>=this.nextFrame) {
-      const dt=Math.min(.1,(now-(this.lastRenderTime||now))/1000);
+      // Physics is already recorded: slow rendering must not stretch a two-second turn.
+      const dt=Math.max(0,(now-(this.lastRenderTime||now))/1000);
       this.lastRenderTime=now;this.nextFrame=now+(this.low?50:1000/30);
       this.render(dt);
     }

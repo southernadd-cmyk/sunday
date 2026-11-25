@@ -127,3 +127,72 @@ test('repeated previews and playback agree across a sweep of spatial plans',()=>
   const p=r.preview(order),result=r.commit(order);assert.equal(p.type,result.type);assert.ok(distance(p.end,result.end.actors[0])<1e-7);
  }
 });
+
+test('an ordinary pass leads a moving teammate and leaves possession with him',()=>{
+ const r=start();openPitch(r,{x:0,z:0});
+ Object.assign(r.state.actors[1],{x:-12,z:-10});r.intents[1]={x:-14,z:-12,id:1};r.state.passes=0;
+ const action={kind:'pass',ally:1},preview=r.preview(action),result=r.commit(action);
+ assert.equal(result.type,'move');assert.equal(preview.ballOwner,1);assert.equal(r.state.ballOwner,1);
+ assert.deepEqual(r.state.actors[0],r.before.state.actors[0]);assert.equal(r.state.actors[1].x,-14);
+ assert.ok(distance(r.state.ball,{x:-13.5,z:-13})<1e-8);assert.equal(r.state.passes,0);assert.equal(r.state.bursts,1);
+ assert.equal(result.frames[(result.count-1)*STRIDE+ACTORS*2],-13.5);assert.equal(r.state.beats,5);
+});
+test('pass-and-move and an off-ball run keep the ball with the teammate',()=>{
+ const r=start();openPitch(r,{x:0,z:0});Object.assign(r.state.actors[1],{x:-10,z:-8});r.intents[1]={x:-10,z:-8,id:1};
+ assert.equal(r.commit({kind:'pass',ally:1,path:[{x:5,z:-6}]}).type,'move');
+ assert.equal(r.state.ballOwner,1);assert.ok(distance(r.state.actors[0],{x:5,z:-6})<1e-8);
+ assert.equal(r.commit({kind:'run',path:[{x:5,z:-14}]}).type,'move');assert.equal(r.state.ballOwner,1);
+ assert.ok(distance(r.state.ball,{x:r.state.actors[1].x+.5,z:r.state.actors[1].z-1})<1e-8);
+});
+test('teammates can pass to each other before the striker calls for a return into space',()=>{
+ const r=start();openPitch(r,{x:0,z:0});
+ for(const [i,p] of [[1,{x:-10,z:-8}],[2,{x:8,z:-12}]]){Object.assign(r.state.actors[i],p);r.intents[i]={...p,id:i};}
+ r.state.passes=0;
+ assert.equal(r.commit({kind:'pass',ally:1}).type,'move');assert.equal(r.state.ballOwner,1);
+ assert.equal(r.commit({kind:'pass',ally:2}).type,'move');assert.equal(r.state.ballOwner,2);
+ const result=r.commit({kind:'call',path:[{x:2,z:-10}]});
+ assert.equal(result.type,'move');assert.equal(r.state.ballOwner,0);assert.ok(distance(r.state.actors[0],{x:2,z:-10})<1e-8);
+ assert.ok(distance(r.state.ball,{x:2.5,z:-11})<1e-8);assert.equal(r.state.passes,0);
+});
+test('off-ball shots and one-twos, self passes and distant calls do not spend turns',()=>{
+ const r=start();openPitch(r);r.state.ballOwner=1;r.state.ball={x:-20.5,z:-23,y:.6};
+ const before=JSON.stringify(r);
+ for(const order of [{kind:'shot',target:{x:0}},{kind:'one-two',ally:2},{kind:'pass',ally:1},{kind:'pass',ally:14}])assert.equal(r.commit(order).type,'invalid');
+ assert.equal(JSON.stringify(r),before);
+ Object.assign(r.state.actors[0],{x:30,z:20});assert.equal(r.commit({kind:'call'}).type,'invalid');
+ assert.equal(r.state.beats,6);assert.equal(r.state.ballOwner,1);
+});
+test('ordinary passes can be intercepted before arrival',()=>{
+ const r=start();openPitch(r,{x:0,z:0});Object.assign(r.state.actors[1],{x:-12,z:-10});r.intents[1]={x:-12,z:-10,id:1};obstacle(r,7,{x:-5.5,z:-6});
+ const p=r.preview({kind:'pass',ally:1}),result=r.commit({kind:'pass',ally:1});
+ assert.equal(p.type,'intercept');assert.equal(result.type,'intercept');assert.equal(result.hit,7);assert.equal(r.lives,2);assert.equal(r.state.passes,1);
+});
+test('a called return can be intercepted and preview warns before it is played',()=>{
+ const r=start();openPitch(r,{x:0,z:0});r.state.ballOwner=1;
+ Object.assign(r.state.actors[1],{x:-12,z:-10});r.state.ball={x:-11.5,z:-11,y:.6};r.intents[1]={x:-12,z:-10,id:1};obstacle(r,7,{x:-5.5,z:-6});
+ assert.equal(r.preview({kind:'call'}).type,'intercept');assert.equal(r.commit({kind:'call'}).type,'intercept');
+});
+test('one-two automatically finds a safe forward return run without mutating the match',()=>{
+ const r=start();openPitch(r,{x:0,z:0});Object.assign(r.state.actors[1],{x:-10,z:-6});r.intents[1]={x:-10,z:-6,id:1};obstacle(r,7,{x:0,z:-5});
+ const before=JSON.stringify(r),order=r.suggestOneTwo(1);
+ assert.equal(JSON.stringify(r),before);assert.ok(order.path.length);assert.equal(r.preview(order).type,'move');
+ const result=r.commit({kind:'one-two',ally:1});
+ assert.equal(result.type,'move');assert.equal(r.state.ballOwner,0);assert.ok(r.state.actors[0].z<-8);assert.equal(r.state.passes,0);
+});
+test('rewind restores the ball carrier as well as ball position after a pass or call',()=>{
+ for(const kind of ['pass','call']){
+  const r=start();openPitch(r,{x:0,z:0});Object.assign(r.state.actors[1],{x:-10,z:-8});r.intents[1]={x:-10,z:-8,id:1};
+  if(kind==='call'){r.state.ballOwner=1;r.state.ball={x:-9.5,z:-9,y:.6};}
+  const state=clone(r.state);assert.equal(r.commit({kind,ally:1}).type,'move');assert.notEqual(r.state.ballOwner,state.ballOwner);
+  assert.equal(r.rewind(),true);assert.deepEqual(r.state,state);
+ }
+});
+test('passing previews, possession and recorded playback agree through a full combination',()=>{
+ const r=start();openPitch(r,{x:0,z:0});Object.assign(r.state.actors[1],{x:-10,z:-8});r.intents[1]={x:-10,z:-8,id:1};
+ for(const order of [{kind:'pass',ally:1,path:[{x:3,z:-5}]},{kind:'run',path:[{x:3,z:-10}]},{kind:'call',path:[{x:1,z:-17}]}]){
+  const before=JSON.stringify(r),p=r.preview(order);assert.equal(JSON.stringify(r),before);
+  const result=r.commit(order);assert.equal(result.type,p.type);assert.equal(result.end.ballOwner,p.ballOwner);
+  assert.ok(distance(result.end.ball,p.ball)<1e-8);assert.ok(distance(result.end.actors[0],p.end)<1e-8);
+  const offset=(result.count-1)*STRIDE+ACTORS*2;assert.ok(Math.abs(result.frames[offset]-p.ball.x)<1e-5);assert.ok(Math.abs(result.frames[offset+1]-p.ball.z)<1e-5);
+ }
+});

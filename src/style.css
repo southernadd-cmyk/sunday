@@ -21,3 +21,10 @@ dialog{color:var(--cream);background:var(--navy);border:3px solid #b7cdb1;box-sh
 
 @media(max-width:760px){#coach{display:none}.intro-rules>span{font-size:14px;line-height:1.35}.intro-rules{gap:12px}}
 @media(max-width:760px){#coach{display:none}}
+/* Keep passing choices on the grass, next to the player they affect. */
+.ally-marker{display:flex;gap:2px;pointer-events:none;white-space:nowrap}
+.ally-marker button{pointer-events:auto;min-height:32px;touch-action:manipulation}
+.combo-target{color:var(--cyan);min-width:39px;border-left:1px solid #a1e4de66}
+.ally-target.carrier,.call-target{color:var(--yellow);border-color:var(--yellow)}
+.ally-target:focus-visible{outline:2px solid var(--yellow);outline-offset:3px}
+@media(max-width:760px){.ally-marker button{min-height:32px;padding:5px 7px}.combo-target{min-width:36px}}

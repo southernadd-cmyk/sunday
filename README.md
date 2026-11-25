@@ -10,9 +10,10 @@ A Sunday league roguelite set in fictional Saltmere. You are the striker for The
 
 1. **Read the pitch.** The yellow ring is you. Orange paths show each defender's already-committed next movement; circles mark their destinations.
 2. **Plan your run.** Click the grass for a straight run, or drag a route beginning near your yellow ring. Your ghost shows its endpoint. Distance is limited, so a far-away click is shortened to your travel budget.
-3. **Use your teammates.** Click a red shirt's name to ask for a one-two, then choose the return run on the grass. You can pass a defender while the ball is away; the ball itself can still be intercepted.
-4. **Find a finish.** Get into shooting range, read the keeper's movement and click a corner target or a point inside the goalmouth. A learned dink can go over low tackles.
-5. **Play two seconds.** Press Space or the yellow button. The route, ball and defenders move together, then freeze again. There is no real-time input during playback.
+3. **Pass and move.** Tap a red shirt or his name for an ordinary pass. He keeps possession; you still control the striker. Tap grass before playing to pass and move, or run off the ball on the next turn. Tap the carrier's **BALL** label or your own **CALL** label to get it back; add a route to receive into space. You can also pass between teammates. Ordinary passes have a 32m range and do not consume one-twos.
+4. **Make a one-two.** Tap the separate **1–2** beside a teammate. A return run is suggested immediately. Press Space to play, or tap grass to change the route. The preview warns about interceptions; a suggested route cannot guarantee safety if every lane is blocked. Tap a selected pass or 1–2 again to cancel.
+5. **Find a finish.** Get the ball back at your feet, reach shooting range, read the keeper's movement and click a corner target or a point inside the goalmouth. A learned dink can go over low tackles.
+6. **Play two seconds.** Press Space or the yellow button. The route, ball and defenders move together, then freeze again. There is no real-time input during playback.
 
 Goals, saves and tackles come from the actual time-sampled positions and ball height. **There is no shot-percentage dice roll.** The planning preview and playback use the same simulation.
 
@@ -26,12 +27,15 @@ After each goal, collect one of three pieces of kit lying on the pitch. Boots, s
 | --- | --- |
 | Click or tap grass | Plan a run |
 | Drag from your yellow ring | Draw a curved route |
-| Click a red-shirted teammate's label | Set up a one-two |
+| Tap a red shirt or his name | Pass; teammate keeps possession |
+| Tap 1–2 beside a teammate | Suggest a one-two and return run |
+| Tap BALL / CALL | Call for a return pass |
 | Click the goal or LEFT / RIGHT target | Aim a shot |
 | Space | Play the planned two seconds |
 | Arrows / WASD | Plan a run in that direction |
 | Q / E | Plan a diagonal forward run |
-| P | Ask Kev for a one-two |
+| P | Pass to Kev, or call back when off the ball |
+| O | Suggest a one-two with Kev |
 | 1 / 2 | Aim at the left / right corner |
 | B | Toggle a sprint |
 | C | Toggle a dink, after learning it |
@@ -80,5 +84,7 @@ The single **Check and publish SUNDAY** workflow tests and builds code changes o
 `window.sundayPerformance()` reports renderer diagnostics. `/tests/viewport.html` provides mobile layout fixtures on the development server and is excluded from the production build.
 
 The [prototype plan](docs/PROTOTYPE_PLAN.md) describes the new direction. [Validation notes](docs/VALIDATION.md) record the checks and their limits. `node scripts/balance.mjs 12` searches twelve seeded runs to smoke-test solvability, rather than estimate human win rates.
+
+The [Construct 3 assessment](docs/CONSTRUCT3.md) describes a possible visual-editor port. This published version uses Three.js.
 
 All sprites, pitch art and code are original to this project. Sensible Soccer is a visual reference; no original game sprites, sounds or data are included. Third-party library and font licences are bundled under `public/licenses/`.

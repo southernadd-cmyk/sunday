@@ -10,14 +10,15 @@ The match waits for the player. Nobody needs arcade reflexes or a football physi
 
 While the match is frozen, defenders have already committed their next two-second movements. Orange paths show their routes and destinations. The player can then:
 
-- Run with the ball, including a drawn bend around a defender.
+- Run with or without the ball, including a drawn bend around a defender.
 - Spend a limited sprint to cover more ground.
-- Give a teammate the ball and run onto the return pass.
+- Pass to a teammate and leave him in possession, run off the ball, then call for a return into space. Teammates can pass between themselves.
+- Choose a one-two for a suggested give-and-go route, with the option to redraw it. This spends a limited combination; ordinary passes do not.
 - Aim a ground shot or, with the appropriate upgrade, a dink.
 
 Pressing Play moves all those bodies and the ball together. Time then stops again. Collisions are tested at the same time samples that produce the animation, and previews run that same calculation. There is no hidden probability roll after selecting a good spatial plan.
 
-A safe endpoint is not enough: a route can be tackled on the way. A passing lane can cross a defender's movement. A goalkeeper can be drawn towards one post before the striker takes the other corner. These should be readable football problems.
+A safe endpoint is not enough: a route can be tackled on the way. A passing lane can cross a defender's movement. Possession remains with the actual recipient between turns. A goalkeeper can be drawn towards one post before the striker takes the other corner. These should be readable football problems.
 
 ## The run
 
