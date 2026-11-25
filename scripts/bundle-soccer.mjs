@@ -183,6 +183,18 @@ fk=patch(fk,"const gx = (defendingTeam === 'A') ? 0 : field.width;", `const comp
     const gx = compact ? ((sim.isSecondHalf() ? taker.team === 'B' : taker.team === 'A') ? field.width : 0) : (defendingTeam === 'A' ? 0 : field.width);`);
 fk=patch(fk,'if (!isIndirect && distToGoal < shootRange) {','if (!isIndirect && distToGoal < shootRange && (!compact || sim.sundayFreekickPlan.direct)) {');
 fk=patch(fk,'willShoot = freekickShouldShoot(playbook, !!(shotResult && shotResult.ok), distToGoal, shootRange);','willShoot = compact ? !!shotResult?.ok : freekickShouldShoot(playbook, !!(shotResult && shotResult.ok), distToGoal, shootRange);');
+fk=patch(fk,'if (willShoot) {', `if (compact && !isIndirect && sim.sundayFreekickPlan.direct && sim.sundayPlanDirectFreeKick) {
+      const planned = sim.sundayPlanDirectFreeKick(taker);
+      willShoot = !!planned;
+      if (planned) shotResult = {target:planned.aim,heightSpeed:planned.heightSpeed,routine:planned.routine,curveForce:planned.curveForce};
+    }
+    if (willShoot) {`);
+fk=patch(fk,'taker.fsm.changeState(PlayerStates.Shoot);', `if (shotResult?.routine) {
+        taker.humanKick = {kind:'shoot',heightSpeed:shotResult.heightSpeed,curveForce:shotResult.curveForce};
+        taker.sundayDirectRoutine = shotResult.routine;
+      }
+      taker.fsm.changeState(PlayerStates.Shoot);`);
+
 fk=patch(fk,"let passType = kickPrefs.passType === 'long' ? 'long' : 'short';","let passType = !compact && kickPrefs.passType === 'long' ? 'long' : 'short';");
 fk=patch(fk,"if (!target && passType === 'short') {","if (!target && passType === 'short' && !compact) {");
 fk=patch(fk,'let target = null;', `let target = null;
@@ -203,9 +215,12 @@ fk=patch(fk,'let target = null;', `let target = null;
 fk=patch(fk,"if (squad && typeof squad.pickBestSafePassTarget === 'function') {","if (!compact && squad && typeof squad.pickBestSafePassTarget === 'function') {");
 fk=patch(fk,"taker.passAim = (squad && typeof squad.getBestPassToReceiver === 'function')","taker.passAim = compact ? compactAim : (squad && typeof squad.getBestPassToReceiver === 'function')");
 fk=patch(fk,'} else if (isIndirect) {','} else if (isIndirect || compact) {');
+fk=patch(fk,'taker.fsm.changeState(PlayerStates.Pass);', `if (compact && sim.sundayPrepareLayoff) sim.sundayPrepareLayoff(taker,target);
+        taker.fsm.changeState(PlayerStates.Pass);`);
 fk += `  if (sim.sundayOnFreekickChoice) {
       const shooting = taker.fsm.getNameOfCurrentState().toLowerCase() === 'shoot';
-      sim.sundayOnFreekickChoice(shooting ? 'shoot' : 'pass', taker.team, shooting ? taker.shotAim : taker.passAim);
+      sim.sundayOnFreekickChoice(shooting ? 'shoot' : 'pass', taker.team, shooting ? taker.shotAim : taker.passAim, shooting ? taker.sundayDirectRoutine : null);
+      taker.sundayDirectRoutine = null;
     }
   `;
 resume=resume.slice(0,fkStart)+fk+resume.slice(fkEnd);
