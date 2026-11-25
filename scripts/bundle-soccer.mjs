@@ -128,6 +128,7 @@ safety=patch(safety,'return v0;', "return Settings.SUNDAY_ATTACK && !isLong ? Ma
 writeFileSync(resolve(upstream,safetyFile),safety+'\n');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
+copyFileSync(resolve(root,'scripts/engine-evaluation/five-tactics.js'),resolve(upstream,'five-tactics.js'));
 const license=readFileSync(resolve(upstream,'LICENSE'),'utf8');
 const entry="export {createSoccerMatch,SOCCER_STEP,CHIPS,chipOffers,RELOAD_COST} from "+JSON.stringify(adapter)+";\nexport {AUTO_TRAITS} from "+JSON.stringify(resolve(root,'src/engine.js'))+";";
 const result=await build({stdin:{contents:entry,resolveDir:root,sourcefile:'sunday-soccer-entry.js'},bundle:true,platform:'browser',format:'esm',target:'es2022',minify:true,write:false,legalComments:'inline',banner:{js:'/* Generated SUNDAY Soccer-JS bundle; upstream '+pin+'\\n'+license.replaceAll('*/','* /')+'\\n*/'}});
