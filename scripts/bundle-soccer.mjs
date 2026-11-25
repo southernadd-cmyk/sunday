@@ -31,6 +31,7 @@ playerText=playerText.replace('function getPassReceiverPosition(teammate, carrie
         // Aim at the actual run, not the unrelated eleven-a-side support grid.
         return {x: teammate.x * .75 + target.x * .25, y: teammate.y * .75 + target.y * .25};
     }`);
+playerText=playerText.replace('const forwardStep = Utils.scaleFieldX(inAttackingHalf ? 12.5 : 7.8125)', `const forwardStep = Utils.scaleFieldX(Settings.SUNDAY_ATTACK ? (inAttackingHalf ? 15 : 13) : (inAttackingHalf ? 12.5 : 7.8125))`);
 writeFileSync(resolve(upstream,playerPath),playerText+'\n');
 // Opt-in compact-pitch decision changes; original profiles retain exact upstream logic.
 const teamFile='kernel/core/entities/team.js';
@@ -57,6 +58,9 @@ teamText=patch(teamText,'const passTypeOverride = opts.passType;', `if (Settings
             const field = Utils.getFieldBounds();
             const sign = oppGoalX > field.centerX ? 1 : -1;
             let best = null, bestValue = -Infinity;
+            const carrierClearance = Math.min(...opponents.filter(o=>!o.isSentOff&&o.role!=='GK').map(o=>Math.hypot(o.x-from.x,o.y-from.y)));
+            const underPressure = carrierClearance < 3.0;
+            const carrierDepth = 1-Math.abs(from.x-oppGoalX)/field.width;
             for (const mate of teammates) {
                 if (mate === passer.lastPassFrom && passer.passLinkCooldown > 0) continue;
                 const target = getPassReceiverPosition(mate, passer, passer.level);
@@ -67,13 +71,19 @@ teamText=patch(teamText,'const passTypeOverride = opts.passType;', `if (Settings
                     if (!passSafeFromAllOpponents(from, aim, mate, opponents, speed)) continue;
                     const gain = (aim.x-from.x)*sign;
                     const depth = 1-Math.abs(aim.x-oppGoalX)/field.width;
+                    // In the build-up phase, hold and carry rather than repeatedly recycling unpressured possession.
+                    if (carrierDepth < .67 && !underPressure && gain < field.width*.055) continue;
                     const central = 1-Math.abs(aim.y-field.centerY)/(field.height*.5);
                     const clearance = Math.min(...opponents.filter(o=>!o.isSentOff).map(o=>Math.hypot(o.x-aim.x,o.y-aim.y)));
-                    const value = gain*.8 + Math.min(6,clearance)*.9 + (depth>.60?central*4:0) - d*.16;
+                    const entersFinalThird = carrierDepth < .67 && depth >= .67;
+                    const value = gain*1.55 + Math.min(6,clearance)*.68 + (depth>.60?central*4:0) + (entersFinalThird?7:0) - d*.12;
                     if (value>bestValue) {bestValue=value;best={teammate:mate,type:'short',aim,progressive:gain,lineBreak:false};}
                 }
             }
             if (best && bestValue>0) return best;
+            // No safe progressive option: do not fall back to a random aerial
+            // or backward ball while the carrier has room to advance.
+            if (!underPressure && carrierDepth < .67) return null;
         }
         const passTypeOverride = opts.passType;`);
 writeFileSync(resolve(upstream,teamFile),teamText);
@@ -108,7 +118,7 @@ outfield=patch(outfield,'if (distToGoal < getShootRange(p)', `if (Settings.SUNDA
                 }
                 if (distToGoal < getShootRange(p)`);
 outfield=patch(outfield,'const tryShoot = willingness >= 1 || Math.random() < willingness;', 'const tryShoot = (Settings.SUNDAY_ATTACK && p.passLinkCooldown > 0 && p.lastPassFrom && distToGoal < field.width * .30) || willingness >= 1 || Math.random() < willingness;');
-outfield=patch(outfield,'const passChance = computeDribblePassChance(p, threat);','const passChance = Settings.SUNDAY_ATTACK ? Math.max(computeDribblePassChance(p, threat), threat.threatened ? .68 : .18) : computeDribblePassChance(p, threat);');
+outfield=patch(outfield,'const passChance = computeDribblePassChance(p, threat);','const passChance = Settings.SUNDAY_ATTACK ? Math.max(computeDribblePassChance(p, threat), threat.threatened ? .68 : .26) : computeDribblePassChance(p, threat);');
 writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
 // The pass predictor and actual kick share this function. Crisp ground
 // passes on the compact pitch must use the same speed in both places.
