@@ -32,6 +32,16 @@ function patch(src,from,to){if(!src.includes(from))throw Error('Missing pinned u
 teamText=patch(teamText,'if (!isPassReceiverAhead(passer, teammate, passer.level)) continue;', 'if (!Settings.SUNDAY_EXPRESS && !isPassReceiverAhead(passer, teammate, passer.level)) continue;');
 teamText=patch(teamText,'if (bestShortScore > shortBar) return bestShort;', 'if (bestShortScore > shortBar) return bestShort;\\n        if (Settings.SUNDAY_EXPRESS && bestShort && bestShortScore > 0) return bestShort;'.replace('\\n','\n'));
 teamText=patch(teamText,'if (bestLongScore > longBar) return bestLong;', 'if (Settings.SUNDAY_EXPRESS && bestShortScore > shortBar && bestShortScore >= bestLongScore - 1) return bestShort;\\n        if (bestLongScore > longBar) return bestLong;'.replace('\\n','\n'));
+teamText=patch(teamText,'let score = scorePassTarget(passer, teammate, aimDist, open);', `let score = scorePassTarget(passer, teammate, aimDist, open);
+            if (Settings.SUNDAY_ATTACK) {
+                const field = Utils.getFieldBounds();
+                const forward = (oppGoalX > passer.x ? 1 : -1);
+                const gain = (aim.x - passer.x) * forward / field.width;
+                const central = 1 - Math.min(1, Math.abs(aim.y - field.centerY) / (field.height * 0.5));
+                const nearGoal = 1 - Math.abs(aim.x - oppGoalX) / field.width;
+                score += Math.max(0, gain) * 12 + (nearGoal > .66 ? central * 3 : 0);
+                if (open && nearGoal > .66) score += 2;
+            }`);
 writeFileSync(resolve(upstream,teamFile),teamText);
 const outfieldFile='kernel/core/entities/player_states_outfield.js';
 let outfield=git('show','HEAD:'+outfieldFile);
@@ -46,6 +56,7 @@ simText=patch(simText,"        for (const p of this.players) {\n            if (
 writeFileSync(resolve(upstream,simFile),simText);
 outfield=patch(outfield,'const target = p.supportTarget || p.getIdleMoveTarget();','const target = Settings.SUNDAY_SHAPE ? p.getIdleMoveTarget() : (p.supportTarget || p.getIdleMoveTarget());');
 outfield=patch(outfield,'if (!ball || p.receiveTimer <= 0) {','if (!ball || p.receiveTimer <= 0 || (Settings.SUNDAY_SHAPE && ball.owner && ball.owner !== p)) {');
+outfield=patch(outfield,'if (distToGoal < getShootRange(p)) {','if (distToGoal < getShootRange(p) && (!Settings.SUNDAY_ATTACK || Math.abs(p.y - field.centerY) < field.height * .38 || distToGoal < field.width * .12)) {');
 writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
