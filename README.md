@@ -6,6 +6,10 @@ A Sunday league roguelite set in fictional Saltmere. You are the striker for The
 
 [**Play SUNDAY on GitHub Pages**](https://southernadd-cmyk.github.io/sunday/)
 
+[**Play the native Construct 3 version**](https://southernadd-cmyk.github.io/sunday/construct/) · [**Download the native Construct 3 project**](https://southernadd-cmyk.github.io/sunday/downloads/SUNDAY-Construct3.c3p) · [Open/edit instructions](construct/README.md)
+
+The Construct version includes native sprites, pitch previews and controls, with the same match rules. The native HTML5 export is published at `/sunday/construct/`. The original Pages route remains Three.js while native GPU rendering is verified.
+
 ## How to play
 
 1. **Read the pitch.** The yellow ring is you. Orange paths show each defender's already-committed next movement; circles mark their destinations.
@@ -85,6 +89,6 @@ The single **Check and publish SUNDAY** workflow tests and builds code changes o
 
 The [prototype plan](docs/PROTOTYPE_PLAN.md) describes the new direction. [Validation notes](docs/VALIDATION.md) record the checks and their limits. `node scripts/balance.mjs 12` searches twelve seeded runs to smoke-test solvability, rather than estimate human win rates.
 
-The [Construct 3 assessment](docs/CONSTRUCT3.md) describes a possible visual-editor port. This published version uses Three.js.
+The [Construct 3 notes](docs/CONSTRUCT3.md) describe the native project and its validation status. The current published game uses Three.js.
 
 All sprites, pitch art and code are original to this project. Sensible Soccer is a visual reference; no original game sprites, sounds or data are included. Third-party library and font licences are bundled under `public/licenses/`.

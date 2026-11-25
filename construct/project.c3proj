@@ -1,0 +1,227 @@
+{
+  "projectFormatVersion": 1,
+  "savedWithRelease": 44000,
+  "name": "SUNDAY — The Next Two Seconds",
+  "runtime": "c3",
+  "useWorker": "no",
+  "bundleAddons": false,
+  "usedAddons": [
+    {
+      "type": "plugin",
+      "id": "Sprite",
+      "name": "Sprite",
+      "author": "Scirra",
+      "version": "r440",
+      "bundled": false
+    },
+    {
+      "type": "plugin",
+      "id": "DrawingCanvas",
+      "name": "Drawing Canvas",
+      "author": "Scirra",
+      "version": "r440",
+      "bundled": false
+    },
+    {
+      "type": "plugin",
+      "id": "Text",
+      "name": "Text",
+      "author": "Scirra",
+      "version": "r440",
+      "bundled": false
+    }
+  ],
+  "uniqueId": "sunday-saltmere-c3-001",
+  "objectTypes": {
+    "items": [
+      "Pitch",
+      "Footballer",
+      "Ball",
+      "StrikerRing",
+      "Ghost",
+      "Pickup",
+      "Plans",
+      "HudCanvas",
+      "Label"
+    ],
+    "subfolders": []
+  },
+  "autosaveData": null,
+  "containers": [],
+  "families": {
+    "items": [],
+    "subfolders": []
+  },
+  "layouts": {
+    "items": [
+      "Saltmere"
+    ],
+    "subfolders": []
+  },
+  "eventSheets": {
+    "items": [
+      "Match"
+    ],
+    "subfolders": []
+  },
+  "rootFileFolders": {
+    "script": {
+      "items": [
+        {
+          "name": "main.js",
+          "type": "application/javascript",
+          "sid": 910000000029,
+          "script-info": {
+            "purpose": "main"
+          }
+        },
+        {
+          "name": "controller.js",
+          "type": "application/javascript",
+          "sid": 910000000030,
+          "script-info": {
+            "purpose": "none"
+          }
+        },
+        {
+          "name": "engine.js",
+          "type": "application/javascript",
+          "sid": 910000000031,
+          "script-info": {
+            "purpose": "none"
+          }
+        }
+      ],
+      "subfolders": []
+    },
+    "sound": {
+      "items": [],
+      "subfolders": []
+    },
+    "music": {
+      "items": [],
+      "subfolders": []
+    },
+    "video": {
+      "items": [],
+      "subfolders": []
+    },
+    "font": {
+      "items": [],
+      "subfolders": []
+    },
+    "icon": {
+      "items": [
+        {
+          "name": "icon-16.png",
+          "type": "image/png",
+          "sid": 910000000032,
+          "icon-info": {
+            "purpose": "app-icon"
+          }
+        },
+        {
+          "name": "icon-32.png",
+          "type": "image/png",
+          "sid": 910000000033,
+          "icon-info": {
+            "purpose": "app-icon"
+          }
+        },
+        {
+          "name": "icon-64.png",
+          "type": "image/png",
+          "sid": 910000000034,
+          "icon-info": {
+            "purpose": "app-icon"
+          }
+        },
+        {
+          "name": "icon-128.png",
+          "type": "image/png",
+          "sid": 910000000035,
+          "icon-info": {
+            "purpose": "app-icon"
+          }
+        },
+        {
+          "name": "icon-256.png",
+          "type": "image/png",
+          "sid": 910000000036,
+          "icon-info": {
+            "purpose": "app-icon"
+          }
+        },
+        {
+          "name": "icon-512.png",
+          "type": "image/png",
+          "sid": 910000000037,
+          "icon-info": {
+            "purpose": "app-icon"
+          }
+        }
+      ],
+      "subfolders": []
+    },
+    "general": {
+      "items": [],
+      "subfolders": []
+    }
+  },
+  "timelines": {
+    "items": [],
+    "subfolders": []
+  },
+  "properties": {
+    "description": "A Sunday league roguelite played on a full-screen pixel pitch. Freeze, pass, plot a run, and play the next two seconds.",
+    "version": "0.3.0.0",
+    "author": "Adam Clement",
+    "authorEmail": "",
+    "authorWebsite": "https://southernadd-cmyk.github.io/sunday/",
+    "appId": "uk.saltmere.sunday",
+    "pixelRounding": true,
+    "zAxisScale": "normalized",
+    "fov": 0.7853981633974483,
+    "useLoaderLayout": false,
+    "fullscreenMode": "scale-outer",
+    "fullscreenQuality": "low",
+    "viewportFit": "auto",
+    "backgroundColor": [
+      0.13,
+      0.33,
+      0.19,
+      1
+    ],
+    "splashColor": [
+      0.09,
+      0.15,
+      0.25,
+      1
+    ],
+    "useThemeColor": true,
+    "themeColor": [
+      0.09,
+      0.15,
+      0.25,
+      1
+    ],
+    "orientations": "any",
+    "webgpu": "auto",
+    "gpuPreference": "low-power",
+    "scriptsType": "module",
+    "framerateMode": "vsync",
+    "compositingMode": "standard",
+    "sampling": "nearest",
+    "downscaling": "low",
+    "renderingMode": "auto",
+    "anisotropicFiltering": "auto",
+    "maxSpriteSheetSize": 2048,
+    "loaderStyle": "splash",
+    "preloadSounds": false,
+    "autoReloadScriptsOnPreview": false,
+    "exportFileStructure": "folders"
+  },
+  "viewportWidth": 960,
+  "viewportHeight": 640,
+  "firstLayout": "Saltmere"
+}

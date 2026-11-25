@@ -1,0 +1,9 @@
+{
+  "name": "HudCanvas",
+  "plugin-id": "DrawingCanvas",
+  "sid": 910000000023,
+  "isGlobal": false,
+  "instanceVariables": [],
+  "behaviorTypes": [],
+  "effectTypes": []
+}

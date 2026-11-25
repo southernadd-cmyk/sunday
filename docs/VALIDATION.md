@@ -25,3 +25,9 @@ Playback now uses elapsed visible time, so throttled rendering does not stretch 
 This is a first playable of a different mechanic. Human difficulty, football feel, physical Android touch input and sustained GPU performance still need playtesting. The browser compatibility renderer is available for environments with WebGL disabled. Source and build verification alone do not establish GPU shader compilation or hardware frame pacing.
 
 Only club progress is saved; an active run is lost on refresh. The opponent AI is intentionally deterministic and readable. It does not simulate a full team or a ninety-minute match.
+
+## Construct 3 project
+
+The native package opens in Construct r506.4 and passes script validation. Six further checks cover package references and frame dimensions, native pass/call inputs, automatically playable one-twos and rewind, portrait coordinates/label pooling, pointer-to-route/playback agreement, and a learned dink resetting between runs. Together with the original engine checks, 37 tests pass. The adapter tests use API doubles; they cannot verify Construct GPU rendering. The available browser failed to initialize WebGL, so native layout/preview visuals remain unverified.
+
+A genuine Construct HTML5 export completed with PNG assets and the optional image optimizer disabled. It is available at `/sunday/construct/`; its three project scripts match the editable source byte for byte. The exported runtime is unchanged. The available browser cannot render the native game because WebGL initialization fails.

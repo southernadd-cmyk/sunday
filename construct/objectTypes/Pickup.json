@@ -1,0 +1,230 @@
+{
+  "name": "Pickup",
+  "plugin-id": "Sprite",
+  "sid": 910000000021,
+  "isGlobal": false,
+  "instanceVariables": [],
+  "behaviorTypes": [],
+  "effectTypes": [],
+  "animations": {
+    "items": [
+      {
+        "frames": [
+          {
+            "width": 24,
+            "height": 24,
+            "originX": 0.5,
+            "originY": 0.8,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000014,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000015,
+        "name": "boots",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      },
+      {
+        "frames": [
+          {
+            "width": 24,
+            "height": 24,
+            "originX": 0.5,
+            "originY": 0.8,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000015,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000016,
+        "name": "orange",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      },
+      {
+        "frames": [
+          {
+            "width": 24,
+            "height": 24,
+            "originX": 0.5,
+            "originY": 0.8,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000016,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000017,
+        "name": "shirt",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      },
+      {
+        "frames": [
+          {
+            "width": 24,
+            "height": 24,
+            "originX": 0.5,
+            "originY": 0.8,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000017,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000018,
+        "name": "ball",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      },
+      {
+        "frames": [
+          {
+            "width": 24,
+            "height": 24,
+            "originX": 0.5,
+            "originY": 0.8,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000018,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000019,
+        "name": "watch",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      },
+      {
+        "frames": [
+          {
+            "width": 24,
+            "height": 24,
+            "originX": 0.5,
+            "originY": 0.8,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000019,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000020,
+        "name": "tape",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      }
+    ],
+    "subfolders": []
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "editor": "Construct r506.4",
+  "format": "Web (HTML5)",
+  "native_export": true,
+  "source_directory": "construct",
+  "web_directory": "public/construct",
+  "runtime_modified": false,
+  "export_options": {
+    "lossless": "PNG",
+    "deduplicate_images": true,
+    "optimize_images": false,
+    "minify": "None",
+    "offline_support": false
+  },
+  "project_script_sha256": {
+    "main.js": "8b07bc8659a762930cc4dabb410ce6b2e5b0ed21fa43678a5e33b43b664477ed",
+    "controller.js": "b931037de5b257b9936be6bd9ef380604afe5c971d6a91daf00e1c8a345165d6",
+    "engine.js": "7d8cb1b76bcd89bc4718d27adb4df265a6f36563b1c0b03813c715bf94a3f910"
+  },
+  "checks": "Native package opened; Construct script validation passed; automated API-contract checks passed. Native GPU rendering unverified: test browser could not initialize WebGL."
+}

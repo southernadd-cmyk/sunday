@@ -1,0 +1,258 @@
+{
+  "name": "Footballer",
+  "plugin-id": "Sprite",
+  "sid": 910000000008,
+  "isGlobal": false,
+  "instanceVariables": [],
+  "behaviorTypes": [],
+  "effectTypes": [],
+  "animations": {
+    "items": [
+      {
+        "frames": [
+          {
+            "width": 16,
+            "height": 16,
+            "originX": 0.5,
+            "originY": 0.94,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000003,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          },
+          {
+            "width": 16,
+            "height": 16,
+            "originX": 0.5,
+            "originY": 0.94,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000004,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000004,
+        "name": "Home",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      },
+      {
+        "frames": [
+          {
+            "width": 16,
+            "height": 16,
+            "originX": 0.5,
+            "originY": 0.94,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000005,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          },
+          {
+            "width": 16,
+            "height": 16,
+            "originX": 0.5,
+            "originY": 0.94,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000006,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000005,
+        "name": "Away",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      },
+      {
+        "frames": [
+          {
+            "width": 16,
+            "height": 16,
+            "originX": 0.5,
+            "originY": 0.94,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000007,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          },
+          {
+            "width": 16,
+            "height": 16,
+            "originX": 0.5,
+            "originY": 0.94,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000008,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000006,
+        "name": "Keeper",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      },
+      {
+        "frames": [
+          {
+            "width": 16,
+            "height": 16,
+            "originX": 0.5,
+            "originY": 0.94,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000009,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          },
+          {
+            "width": 16,
+            "height": 16,
+            "originX": 0.5,
+            "originY": 0.94,
+            "originalSource": "",
+            "exportFormat": "lossless",
+            "exportQuality": 1,
+            "imageSpriteId": 18000010,
+            "collisionPoly": {
+              "points": [
+                0,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                1
+              ]
+            },
+            "useCollisionPoly": false,
+            "imagePoints": [],
+            "duration": 1
+          }
+        ],
+        "sid": 910000000007,
+        "name": "Official",
+        "isLooping": true,
+        "isPingPong": false,
+        "repeatCount": 1,
+        "repeatTo": 0,
+        "speed": 0
+      }
+    ],
+    "subfolders": []
+  }
+}

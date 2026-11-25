@@ -1,26 +1,29 @@
-# Construct 3 assessment · 25 November 2026
+# Construct 3 version · 25 November 2026
 
-Construct 3 is a viable direction for an editable 2D version of SUNDAY. Its visual layout, sprite and animation tools suit the full-screen pixel pitch. The live game currently remains Three.js; no native Construct project has been created or validated.
+[Play the native HTML5 version](https://southernadd-cmyk.github.io/sunday/construct/). A native Construct project is now available in [`construct/`](../construct/README.md), with a ready-to-open [SUNDAY-Construct3.c3p](../public/downloads/SUNDAY-Construct3.c3p).
 
-The game rules are plain JavaScript in `src/engine.js`, separate from rendering and browser input. A port can reuse those rules, the fixed-step playback data and the behavioural tests. The work is a new Construct display/input adapter, rather than importing the whole Three.js application.
+It uses nine native object types on two layers: Pitch, Footballer, Ball, StrikerRing, Ghost, Pickup, Plans, HudCanvas and Label. Construct renders its own Sprites, Drawing Canvas overlays and Text objects. It does not embed the Three.js game.
 
-## Smallest useful port
+The port includes the four-fixture run, persistent teammate possession, pass-and-move, calls into space, automatically suggested one-twos, shooting/dinks, interceptions, rewind, pickups, club upgrades and saved-profile migration. Input and presentation are in `construct/scripts/controller.js`; match outcomes use a copied, byte-identical `src/engine.js`. Initial positions and original pixel assets are editable through Construct's layout/animation editors. The rule system remains JavaScript.
 
-1. Create one pitch layout with nearest-neighbour sprites, a fixed logical resolution and compact edge controls. Reuse original project art.
-2. Load the engine as a script module. Map twenty sprite instances to actor IDs and a ball instance to the recorded ball coordinates. Keep the striker's yellow ring even when a teammate has possession.
-3. Map pitch taps to world coordinates, and expose separate normal pass, one-two and call actions. Draw route/defender previews in the same coordinate system.
-4. Let the engine resolve the order once. Animate its recorded frames; do not use Construct collision behaviours to make a second decision about the outcome.
-5. Bring across the four fixtures, pickups, rewind and existing profile migration. Check parity against the JavaScript tests.
-6. Export an HTML5 build, test the exported game under `/sunday/`, then replace the Pages deployment once input, appearance and saves are verified.
+The presentation caps active playback at 30 ticks per second, reuses native instances and Text objects, redraws planning overlays when decisions change, uses nearest-neighbour sprites and low-resolution fullscreen rendering, and performs no match simulation during animation. A frozen match does no per-tick adapter work.
 
-## Edition and workflow
+## Verification
 
-The current official comparison lists HTML5 export and unlimited JavaScript code, snippets and script files in the Free Edition. It also limits that edition to two layers and 50 events when signed in with a verified email (25 as a guest). Paid editions remove those event/layer limits. A script-driven slice can therefore start without buying a licence; a large visual event-sheet version is likely to need a paid edition.
+The package opened in Construct r506.4 and passed its script-validation phase. All object types, layers, scripts and original PNG frames resolved. The automated suite now has 37 passing checks. Native-adapter tests exercise ordinary possession, returned passes into space, immediately playable one-two suggestions, rewind, pointer coordinates and shifted portrait viewports through documented Construct API doubles.
 
-Construct supports JavaScript/TypeScript script files and folder projects with external editors. Keep the project in Git for reviewable source history; deploy its exported web output separately.
+The available browser failed to initialize WebGL, preventing a native layout/preview check. A genuine Construct HTML5 export completed with PNG sprite sheets and optional image optimization disabled. It is published at `/sunday/construct/`, alongside the original Three.js route. The owned project modules are synchronized after edits, without modifying the Construct engine. Native GPU rendering remains unverified. See the [project instructions and current limits](../construct/README.md).
 
-Official references:
+Export settings and project-module hashes are recorded in [CONSTRUCT3_EXPORT.json](CONSTRUCT3_EXPORT.json).
+
+## Edition
+
+The current official comparison includes HTML5 export and JavaScript files in the Free Edition, with two layers and up to 50 events for a verified account (25 as a guest). This project uses two layers and no event blocks. Construct's export UI confirms that **script minification requires a paid edition**; choose **None** when exporting with the Free Edition. No paid licence is required to open this slice.
+
+References:
 
 - [Edition comparison](https://www.construct.net/en/make-games/buy-construct)
-- [Using an external editor](https://www.construct.net/en/make-games/manuals/construct-3/scripting/guides/using-external-editor)
-- [Publishing projects](https://www.construct.net/en/make-games/manuals/construct-3/overview/publishing-projects)
+- [Project format](https://www.construct.net/en/tutorials/constructs-project-format-3275)
+- [Runtime interface](https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/iruntime)
+- [Drawing Canvas interface](https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/plugin-interfaces/drawing-canvas)
+- [Sprite interface](https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/plugin-interfaces/sprite)

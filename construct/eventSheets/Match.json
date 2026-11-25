@@ -1,0 +1,10 @@
+{
+  "name": "Match",
+  "sid": 910000000028,
+  "events": [
+    {
+      "eventType": "comment",
+      "text": "SUNDAY — THE NEXT TWO SECONDS\nNative Construct sprites and Drawing Canvas overlays. Match rules: scripts/engine.js. Input, UI and playback: scripts/controller.js.\nDouble-click Footballer in the Project Bar to edit original pixel animations. The first attack is laid out here; the engine supplies the following attacks."
+    }
+  ]
+}
