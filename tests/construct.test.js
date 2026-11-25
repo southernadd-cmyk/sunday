@@ -122,3 +122,17 @@ test('goalkeeper is selectable and can distribute possession',()=>{
  const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.state.ballOwner=15;g.run.state.ball={x:.5,z:44,y:.6};g.run.intents=g.run.makeIntents();g.selected=0;g.refresh();
  g.select(15);assert.equal(g.selected,15);g.pass(6);assert.ok(g.preview.valid);assert.equal(g.order.actor,15);
 });
+
+test('timed reception buttons retain the runner path and alter delivery',()=>{
+ const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');
+ for(const i of [7,8,9,10,11,12,13,14])Object.assign(g.run.state.actors[i],{x:32,z:-42});
+ Object.assign(g.run.state.actors[0],{x:0,z:0});Object.assign(g.run.state.actors[1],{x:8,z:0});g.run.state.ball={x:.5,z:-1,y:.6};g.run.intents=g.run.makeIntents();g.updateActors();g.refresh();
+ tapPlayer(g,1);g.planPath([{x:8,z:-11}]);tapPlayer(g,0);click(g,'PASS');tapPlayer(g,1);
+ assert.ok(g.support[1]?.length);click(g,'0.5s');assert.ok(g.preview.valid);const early=g.preview.delivery.target.z;
+ click(g,'1.5s');assert.ok(g.preview.valid);assert.ok(g.preview.delivery.target.z<early);click(g,'PLAY 2s');finish(g);assert.equal(g.selected,1);
+});
+test('challenge controls arm a tackle and allow its timing to be adjusted',()=>{
+ const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.kickoff(false);g.selected=4;g.updateActors();g.refresh();
+ click(g,'STAND');assert.equal(g.order.kind,'tackle');assert.equal(g.order.tackle,'stand');click(g,'0.5s');assert.equal(g.order.tackleAt,.5);
+ click(g,'SLIDE');assert.equal(g.order.tackle,'slide');click(g,'2.0s');assert.equal(g.order.tackleAt,2);assert.ok(g.preview.valid);
+});

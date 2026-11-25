@@ -43,3 +43,7 @@ The available browser reports **Failed to initialise WebGL**, so native layout/p
 The HTML5 export completed with PNG sprite sheets and image optimization off; the optional optimization step stalled in this browser. The three owned project scripts are synchronized into that export after code edits, without modifying the Construct runtime. Art/layout changes require a fresh export from Construct. The downloadable web ZIP contains the same files as the native web route.
 
 For a normal web export, use **Menu → Project → Export → Web (HTML5)**. Free Edition export works with **Minify mode: None**; script minification is a paid feature. Keep runtime outcome logic in the shared engine, and verify both mouse/touch input and rendering before replacing the live game.
+
+## Timed passes and challenges
+
+Plan the receiver's run, select the ball carrier, choose PASS and select the runner. AUTO leads the runner at ordinary pass pace; 0.5s, 1.0s, 1.5s and 2.0s choose exact reception times. Tap the cyan markers along the run or use the command buttons. The preview rejects unreachable passes and shows the actual trajectory. Without possession, PRESS approaches but does not tackle. STAND (T) is short reach; SLIDE (F) is longer reach but risks a foul from behind. Choose the challenge time and adjust the approach route. A miss or slide leaves the defender recovering next turn; a foul gives the opponent a free kick. Interceptions and keeper saves remain positional.
