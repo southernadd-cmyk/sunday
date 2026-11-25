@@ -62,6 +62,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  if(express)for(const team of [baseHome,away])Object.assign(team,{PASS_AGGRESSION:.86,ATTACK_SUPPORT_INTENSITY:.9,ATTACK_SUPPORT_FORM_PULL:.64,ATTACK_SUPPORT_OWN_HALF_BLEND:.72,THROUGH_BALL_LEAD_EXTRA:1.8,SHORT_PASS_MAX_DIST:24,LONG_PASS_MIN_DIST:23,LONG_PASS_MAX_DIST:44,SHOOT_RANGE_REF:39,SHOOT_FORCE_BLOCKED_CHANCE:.07,SHOOT_CONTESTED_CHANCE:.38,SHOOT_SPEED_BASE:23,SHOOT_ANGLE_NOISE_SCALE:.0035,GK_SHOT_SAVE_MULT:.38,GK_DIVE_CHANCE_SHOT:.65,FIRST_TOUCH_FUMBLE_BASE:.015,FIRST_TOUCH_FUMBLE_SCALE:.19});
  if(shape)for(const team of [baseHome,away])Object.assign(team,{FORMATION_HOLD:.72,ATTACK_SUPPORT_INTENSITY:.66,DEFENSIVE_PRESS_INTENSITY:.42,PASS_AGGRESSION:.65,SHOOT_RANGE_REF:32,SHOOT_FORCE_BLOCKED_CHANCE:0,COUNTERPRESS_MAX_SURGE:1,FIRST_TOUCH_FUMBLE_BASE:.005,FIRST_TOUCH_FUMBLE_SCALE:.12});
  if(attack)for(const team of [baseHome,away])Object.assign(team,{PASS_AGGRESSION:.76,SHOOT_RANGE_REF:37,SHOOT_FORCE_BLOCKED_CHANCE:.025,SHOOT_CONTESTED_CHANCE:.36,SHORT_PASS_MAX_DIST:28,LONG_PASS_MAX_DIST:52,THROUGH_BALL_LEAD_EXTRA:2.0});
+ if(zones)for(const team of [baseHome,away])Object.assign(team,{TACKLE_ATTEMPT_COOLDOWN:.75});
  let home=baseHome;
  Settings.HEADLESS=true;Settings.soundsMuted=true;Settings.TIME_SPEED=1;
  Settings.FIELD_SIZE_MULTIPLIER=format===5?.60:1;
@@ -131,7 +132,13 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
      if(ball.owner){tacticalPhase.A=ball.owner.team==='A'?'attack':'defend';tacticalPhase.B=ball.owner.team==='B'?'attack':'defend';}
      const mode=tacticalPhase[p.team],target=tacticalAssignment(p.role,mode,clamp(bx/field.width,0,1),clamp(by/field.height,0,1));
      p.sundayAssignment=target.action;
-     return {x:field.width*(right?target.x:1-target.x),y:field.height*(right?target.y:1-target.y)};
+     let tx=target.x*field.width,ty=target.y*field.height;
+     // Protect the passing triangle: an off-ball player must not occupy
+     // the carrier's immediate pocket, even between authored grid cells.
+     if(ball.owner?.team===p.team&&ball.owner!==p&&Math.hypot(tx-bx,ty-by)<field.width*.13){
+      tx=clamp(tx+(p.role==='CB'?-1:1)*field.width*.12,field.width*.10,field.width*.93);
+     }
+     return {x:right?tx:field.width-tx,y:right?ty:field.height-ty};
     }
     const depth=bx/field.width,wide=field.height;
     let x,y;
