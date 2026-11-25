@@ -171,6 +171,7 @@ outfield=patch(outfield,'const kick = computeShootKick(p);', `const kick = compu
                         if ((isFreekick || p.sundayCombinationShot) && p.humanKick?.kind==='shoot' && p.level.sundayPlanDirectFreeKick) {
                             ball.x=p.x;ball.y=p.y;ball.z=0;
                         }`);
+outfield=patch(outfield,'p.shotHeightBoost = null;\n                p.humanKick = null;\n            }','p.shotHeightBoost = null;\n                p.humanKick = null;\n                p.sundayCombinationShot = null;\n            }');
 // Use the native slide FSM, but record every launch (including misses)
 // separately from the actual tackle contact roll.
 outfield=patch(outfield,'p.isSliding = true;\n                        p.slideTimer = 0.65;', `p.isSliding = true;
