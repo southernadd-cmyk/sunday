@@ -99,3 +99,53 @@ export function systemCanPress(id,{hasOpponentOwner,distance,depth}){
  if(!hasOpponentOwner||config.press===null)return true;
  return distance<=config.press||depth<.30;
 }
+
+// Compact-pitch free kicks. Inputs/outputs use real field units, with x
+// increasing towards the opposition goal. A 5m restart exclusion is a SUNDAY
+// house rule; goalkeepers stay in their own goal and are not wall members.
+export function freeKickLayout({width,height,x,y,attackers,defenders,indirect=false}){
+ const margin=.65,clearance=5,depth=x/width,centre=height/2;
+ const bound=(a,b)=>({x:clamp(a,margin,width-margin),y:clamp(b,margin,height-margin)});
+ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+ const ball={x,y},goal={x:width,y:centre};
+ const goalDist=distance(ball,goal);
+ const direct=!indirect&&depth>.65&&Math.abs(y-centre)<height*.33&&goalDist<width*.36;
+ const nx=(width-x)/Math.max(.001,goalDist),ny=(centre-y)/Math.max(.001,goalDist);
+ const used=[];
+ // Prefer distinct outlets: a short inward diagonal, a forward runner and
+ // a safety outlet. Never pile them onto the taker or each other.
+ const inward=y<centre?1:-1;
+ const targets=[
+  [x+width*.08,y+inward*height*.20,'short-outlet'],
+  [x+width*.22,centre-inward*height*.20,'forward-outlet'],
+  [x-width*.16,centre+inward*height*.19,'safety-outlet']
+ ];
+ const attack=attackers.map((id,i)=>{
+  const [tx,ty,action]=targets[i%targets.length];
+  const choices=[bound(tx,ty),bound(tx,ty+inward*height*.15),bound(x-width*.12,y+inward*height*.32),bound(x-width*.24,centre)];
+  const p=choices.find(p=>distance(p,ball)>2&&used.every(q=>distance(p,q)>1.8))||choices[0];used.push(p);
+  return {id,...p,action};
+ });
+ const walls=direct&&goalDist>clearance+1?Math.min(2,Math.max(0,defenders.length-2)):0;
+ const wall=[];
+ for(let i=0;i<walls;i++){
+  const offset=(i-(walls-1)/2)*1.05;
+  const p=bound(x+nx*(clearance+.15)-ny*offset,y+ny*(clearance+.15)+nx*offset);
+  if(distance(p,ball)>=clearance-.01){wall.push({id:defenders[i],...p,action:'wall'});used.push(p);}
+ }
+ const defend=defenders.filter(id=>!wall.some(p=>p.id===id)).map((id,i)=>{
+  const mark=attack[i%Math.max(1,attack.length)]||{x:x+width*.15,y:centre};
+  const target=bound(mark.x+width*.07,mark.y);
+  const candidates=[target];
+  // Search legal nearby positions rather than clamping a radial push back
+  // inside the exclusion radius at a board or goal line.
+  for(const radius of [clearance+.15,clearance+2,clearance+5])for(let j=0;j<24;j++){
+   const a=j*Math.PI/12;candidates.push(bound(x+Math.cos(a)*radius,y+Math.sin(a)*radius));
+  }
+  const legal=candidates.filter(p=>distance(p,ball)>=clearance-.01&&used.every(q=>distance(p,q)>1.1));
+  legal.sort((a,b)=>distance(a,target)-distance(b,target));
+  const p=legal[0]||bound(width-margin,i%2?height*.8:height*.2);used.push(p);
+  return {id,...p,action:'mark'};
+ });
+ return {direct,clearance,attack,wall,defend};
+}
