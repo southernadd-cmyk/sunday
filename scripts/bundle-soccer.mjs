@@ -167,6 +167,30 @@ const safetyFile='kernel/core/lib/pass_safety.js';
 let safety=git('show','HEAD:'+safetyFile);
 safety=patch(safety,'return v0;', "return Settings.SUNDAY_ATTACK && !isLong ? Math.min(22, v0 * 1.22) : v0;");
 writeFileSync(resolve(upstream,safetyFile),safety+'\n');
+// Keep the native restart countdown, wall contact and kick FSM. Correct the
+// selected taker and attacking end, and prefer short restarts outside range.
+const resumeFile='kernel/providers/simulator/set_piece_resume.js';
+let resume=git('show','HEAD:'+resumeFile);
+resume=patch(resume,'function resolveSetPieceTaker(sim, resumeType) {', `function resolveSetPieceTaker(sim, resumeType) {
+  if (resumeType === 'freekick' && sim.sundayFreekickTaker && !sim.sundayFreekickTaker.isSentOff) return sim.sundayFreekickTaker;`);
+const fkStart=resume.indexOf("} else if (resumeType === 'freekick') {");
+const fkEnd=resume.indexOf("} else if (resumeType === 'throwin') {",fkStart);
+if(fkStart<0||fkEnd<0)throw Error('Pinned free-kick branch missing');
+let fk=resume.slice(fkStart,fkEnd);
+fk=patch(fk,"const gx = (defendingTeam === 'A') ? 0 : field.width;", `const compact = !!sim.sundayFreekickPlan;
+    const gx = compact ? ((sim.isSecondHalf() ? taker.team === 'B' : taker.team === 'A') ? field.width : 0) : (defendingTeam === 'A' ? 0 : field.width);`);
+fk=patch(fk,'if (!isIndirect && distToGoal < shootRange) {','if (!isIndirect && distToGoal < shootRange && (!compact || sim.sundayFreekickPlan.direct)) {');
+fk=patch(fk,'willShoot = freekickShouldShoot(playbook, !!(shotResult && shotResult.ok), distToGoal, shootRange);','willShoot = compact ? !!shotResult?.ok : freekickShouldShoot(playbook, !!(shotResult && shotResult.ok), distToGoal, shootRange);');
+fk=patch(fk,"let passType = kickPrefs.passType === 'long' ? 'long' : 'short';","let passType = !compact && kickPrefs.passType === 'long' ? 'long' : 'short';");
+fk=patch(fk,"if (!target && passType === 'short') {","if (!target && passType === 'short' && !compact) {");
+fk=patch(fk,'} else if (isIndirect) {','} else if (isIndirect || compact) {');
+fk += `  if (sim.sundayOnFreekickChoice) {
+      const shooting = taker.fsm.getNameOfCurrentState().toLowerCase() === 'shoot';
+      sim.sundayOnFreekickChoice(shooting ? 'shoot' : 'pass', taker.team, shooting ? taker.shotAim : taker.passAim);
+    }
+  `;
+resume=resume.slice(0,fkStart)+fk+resume.slice(fkEnd);
+writeFileSync(resolve(upstream,resumeFile),resume+'\n');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
 copyFileSync(resolve(root,'scripts/engine-evaluation/five-tactics.js'),resolve(upstream,'five-tactics.js'));
