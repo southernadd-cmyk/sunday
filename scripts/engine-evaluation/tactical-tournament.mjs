@@ -5,7 +5,7 @@ const ids=Object.keys(SYSTEMS);
 const seeds=[12345,728,9921,1467,2781];
 function aggregate(rows){
  const data={fixtures:rows.length,variants:{}};
- for(const variant of ['legacy','compact']){
+ for(const variant of ['legacy','compact','direct']){
   const subset=rows.filter(r=>r.variant===variant),teams=Object.fromEntries(ids.map(id=>[id,{games:0,wins:0,draws:0,losses:0,points:0,gf:0,ga:0,shots:0,passes:0,tackles:0,interceptions:0,possession:0,opponents:{}}]));
   const freeKicks={};let goals=0,entries=0,created=0,crowding=0;
   for(const r of subset){
@@ -24,7 +24,7 @@ function aggregate(rows){
 }
 if(process.argv[2]==='aggregate'){
  const rows=process.argv.slice(3).flatMap(file=>JSON.parse(readFileSync(file,'utf8')));
- assert.equal(rows.length,360);assert.equal(new Set(rows.map(r=>[r.variant,r.seed,...r.systems].join(':'))).size,360);
+ assert.equal(rows.length,540);assert.equal(new Set(rows.map(r=>[r.variant,r.seed,...r.systems].join(':'))).size,540);
  const result=aggregate(rows);
  writeFileSync('tactical-tournament-summary.json',JSON.stringify(result,null,2));
  console.log('TOURNAMENT_SUMMARY '+JSON.stringify(result));
@@ -41,20 +41,25 @@ if(process.argv[2]==='aggregate'){
  const oldRate=legacy.completedPasses/legacy.releasedPasses,newRate=compact.completedPasses/compact.releasedPasses;
  console.log('FREE_KICK_COMPLETION '+JSON.stringify({legacy:oldRate,compact:newRate}));
  assert.ok(newRate>=oldRate,'Revised free kicks must at least match legacy completion rate');
+ const direct=result.variants.direct.freeKicks;
+ const directRate=direct.completedPasses/direct.releasedPasses;
+ console.log('DIRECT_FREE_KICK_COMPLETION '+JSON.stringify({baseline:newRate,direct:directRate,shots:direct.releasedShots,goals:direct.shotGoals,saves:direct.shotSaves,wallBlocks:direct.shotWallBlocks}));
+ assert.ok(directRate>=oldRate&&directRate>=newRate-.05,'Direct routines must preserve short-restart reliability');
+ assert.ok(direct.releasedShots>0,'Direct free-kick shots must actually happen');
 }else{
  const {createSoccerMatch}=await import('../../construct/scripts/engine.js');
  const seed=Number(process.argv[2]);assert.ok(seeds.includes(seed));
  const rows=[];
- for(const home of ids)for(const away of ids)for(const variant of ['legacy','compact']){
-  const m=await createSoccerMatch(seed,[],0,90,5,'intent',[home,away],{freeKicks:variant==='compact'});
+ for(const home of ids)for(const away of ids)for(const variant of ['legacy','compact','direct']){
+  const m=await createSoccerMatch(seed,[],0,90,5,'intent',[home,away],{freeKicks:variant!=='legacy',directFreeKicks:variant==='direct'});
   for(let i=0;i<20000&&!m.finished;i++){m.step();assert.ok(Number.isFinite(m.ball.x)&&Number.isFinite(m.ball.z));}
   assert.ok(m.finished,JSON.stringify({seed,home,away,variant}));
   assert.ok(m.flow.intentDecisions>0);
   const f=m.flow;
-  if(variant==='compact')assert.equal(f.freeKicks.clearanceViolations,0);
+  if(variant!=='legacy')assert.equal(f.freeKicks.clearanceViolations,0);
   rows.push({seed,variant,systems:[home,away],score:m.score,stats:m.stats.map(t=>({shots:t.shots,passes:t.completed,tackles:t.tackles,interceptions:t.interceptions,possession:t.possession})),freeKicks:f.freeKicks,entries:f.finalThirdEntries,created:f.createdShots,crowding:f.crowdedTicks/Math.max(1,f.shapeTicks)});
  }
- assert.equal(rows.length,72);writeFileSync('tournament-'+seed+'.json',JSON.stringify(rows));
+ assert.equal(rows.length,108);writeFileSync('tournament-'+seed+'.json',JSON.stringify(rows));
  console.log('SHARD_COMPLETE '+seed+' '+rows.length);
  console.log('SHARD_SUMMARY '+JSON.stringify(aggregate(rows)));
 }
