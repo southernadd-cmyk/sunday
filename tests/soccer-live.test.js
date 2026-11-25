@@ -20,3 +20,23 @@ test('real bundled Soccer-JS matches finish, produce varied play, and respect be
 test('all six traits can initialise genuine upstream matches',async()=>{
  for(const trait of Object.keys(AUTO_TRAITS)){const m=await createSoccerMatch(12,[trait],0,300);for(let i=0;i<100;i++)m.step();assert.equal(m.actors.length,22);assert.equal(m.stepSeconds,SOCCER_STEP);}
 });
+
+test('half-time plans influence second-half play, not scores directly',async()=>{
+ async function half(plan){
+  const m=await createSoccerMatch(9,['touch'],0,300);
+  for(let i=0;i<10000&&m.phase!=='halftime';i++)m.step();
+  assert.equal(m.phase,'halftime');const first={score:[...m.score],stats:JSON.parse(JSON.stringify(m.stats))};
+  assert.ok(m.chooseHalfPlan(plan));assert.deepEqual(m.score,first.score);assert.equal(m.callsLeft,2);
+  for(let i=0;i<10000&&!m.finished;i++)m.step();
+  assert.ok(m.finished);return {first,score:m.score,stats:m.stats};
+ }
+ const attack=await half('attack'),protect=await half('protect');assert.deepEqual(attack.first,protect.first);assert.notDeepEqual(attack.stats,protect.stats);
+});
+test('touchline call expires on the match clock and cannot be stacked',async()=>{
+ const m=await createSoccerMatch(3,[],0,300);
+ assert.equal(m.callTouchline('press'),false);
+ for(let i=0;i<500&&m.phase!=='play';i++)m.step();
+ assert.equal(m.phase,'play');const before=m.tacticalSettings();assert.equal(m.callTouchline('press'),true);assert.equal(m.callsLeft,1);assert.equal(m.callTouchline('push'),false);assert.ok(m.tacticalSettings().DEFENSIVE_PRESS_INTENSITY>before.DEFENSIVE_PRESS_INTENSITY);
+ for(let i=0;i<5000&&m.call;i++)m.step();
+ assert.equal(m.call,null);assert.deepEqual(m.tacticalSettings(),before);
+});

@@ -59,11 +59,11 @@ test('title offers exactly Start Game and Instructions, with no legacy movement 
  const point=g.point({x:0,z:0}),[clientX,clientY]=g.field.layerToCssPx(point.x,point.y),ev={pointerId:1,button:0,clientX,clientY};
  g.pointerDown(ev);g.pointerUp(ev);assert.equal(g.drag,null);
  click(g,'PAUSE');const time=g.auto.match.time;g.advanceAuto(2);assert.equal(g.auto.match.time,time);click(g,'PLAY');click(g,'4×');
- for(let i=0;i<60&&g.auto.phase==='match';i++)g.advanceAuto(1);
+ for(let i=0;i<60&&g.auto.phase!=='result';i++){if(g.auto.phase==='halftime'){const time=g.auto.match.time;g.advanceAuto(10);assert.equal(g.auto.match.time,time);assert.ok(g.buttons.some(b=>b.label.text==='GO FOR IT'));click(g,'KEEP THE PLAN');}else g.advanceAuto(1);}
  assert.equal(g.auto.phase,'result');assert.equal(g.auto.results.length,1);click(g,'DRAFT NEXT BEHAVIOUR');assert.equal(g.auto.phase,'draft');assert.ok(!g.auto.offers.includes(id));
  for(let round=1;round<=2;round++){
   await g.autoChoose(g.auto.offers[0]);assert.equal(g.auto.match.upstream,'soccer-js');assert.equal(g.auto.traits.length,round+1);
-  for(let i=0;i<60&&g.auto.phase==='match';i++)g.advanceAuto(1);
+  for(let i=0;i<60&&g.auto.phase!=='result';i++){if(g.auto.phase==='halftime'){const time=g.auto.match.time;g.advanceAuto(10);assert.equal(g.auto.match.time,time);assert.ok(g.buttons.some(b=>b.label.text==='GO FOR IT'));click(g,'KEEP THE PLAN');}else g.advanceAuto(1);}
   assert.equal(g.auto.phase,'result');assert.equal(g.auto.results.length,round+1);
   if(round===1)click(g,'DRAFT NEXT BEHAVIOUR');
  }
@@ -81,4 +81,15 @@ test('native autoplay controls remain in view on portrait and desktop',async()=>
 test('cancelled asynchronous match creation cannot overwrite a different career',async()=>{
  const g=new Sunday(runtime());g.startAuto();const first=g.auto;const pending=g.autoChoose(first.offers[0]);assert.equal(first.phase,'loading');
  g.exitAuto();g.startAuto();const second=g.auto;await pending;assert.equal(g.auto,second);assert.equal(second.phase,'draft');assert.equal(second.match,null);
+});
+
+test('half-time is a mandatory pause even at 4×, and touchline calls change real AI',async()=>{
+ const g=new Sunday(runtime({width:960,height:2000,left:130,top:-600,cssScale:.375}));g.startAuto();g.auto.seed=5;await g.autoChoose(g.auto.offers[0]);const m=g.auto.match;
+ for(let i=0;i<500&&m.phase!=='play';i++)g.advanceAuto(.05);
+ assert.equal(m.phase,'play');assert.equal(m.callsLeft,2);const before=m.tacticalSettings();click(g,'PRESS');assert.equal(m.callsLeft,1);assert.ok(m.tacticalSettings().DEFENSIVE_PRESS_INTENSITY>=before.DEFENSIVE_PRESS_INTENSITY);assert.equal(m.call.id,'press');g.callTouchline('push');assert.equal(m.callsLeft,1);
+ click(g,'4×');for(let i=0;i<60&&g.auto.phase==='match';i++)g.advanceAuto(1);
+ assert.equal(g.auto.phase,'halftime');assert.equal(m.phase,'halftime');assert.equal(m.call,null);assert.equal(m.halfPlanChosen,false);
+ const score=[...m.score],time=m.time;g.advanceAuto(100);assert.equal(m.time,time);assert.deepEqual(m.score,score);
+ for(const b of g.buttons)assert.ok(b.x>=g.v.left&&b.y>=g.v.top&&b.x+b.w<=g.v.right&&b.y+b.h<=g.v.bottom);
+ click(g,'STAY COMPACT');assert.equal(m.halfPlan,'protect');assert.equal(m.callsLeft,2);assert.equal(g.auto.phase,'match');assert.ok(m.tacticalSettings().FORMATION_HOLD>=before.FORMATION_HOLD);assert.equal(m.chooseHalfPlan('attack'),false);
 });

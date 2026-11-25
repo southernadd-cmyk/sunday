@@ -6,7 +6,7 @@ A Sunday league football autobattler in fictional Saltmere. Draft football behav
 
 ## How to play
 
-Select Start Game, draft a behaviour, and watch the match. At full time, draft another behaviour for the next fixture. Pause or use 1×, 2× and 4× speed. Both teams play autonomously.
+Select Start Game, draft a behaviour, and watch the match. At full time, draft another behaviour for the next fixture. Use two touchline calls per half (Press, Push Up, Settle); each lasts ten match minutes and cannot stack. At half-time the game pauses for match statistics and a second-half plan. Calls refill when you resume. Pause or use 1×, 2× and 4× speed. Both teams play autonomously.
 
 The original drag-to-move game is no longer available through the public interface. Its historical rules remain in the repository for regression coverage while the autoplay engine develops.
 

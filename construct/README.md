@@ -7,3 +7,5 @@ Open the single-file project in Construct 3 and preview with F5. The existing na
 The owned project scripts are synchronized to the native export during build. No Construct runtime files or third-party assets are modified.
 
 The downloadable project includes the generated Soccer-JS module with the upstream MIT notice. If opening the source directory from GitHub instead, run `npm ci` and `npm run prebuild` first. The project dynamically expands its native sprite pool to 22 footballers. Matches simulate five minutes at 4× base playback, with additional 2×/4× viewing controls.
+
+Half-time pauses the match until a second-half plan is selected. Touchline calls modify Soccer-JS team-local AI settings for ten in-game minutes, twice per half; they never directly move players or decide outcomes.
