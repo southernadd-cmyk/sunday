@@ -148,8 +148,8 @@ export class Sunday{
   this.label(compact?'SUN':'SUNDAY',L+15*u,T+5*u,sideW,18*u,compact?11:14,C.cream);
   this.label(compact?'OPP':'OPPOSITION',R-sideW-15*u,T+5*u,sideW,18*u,compact?11:14,C.cream,'right');
   this.label(m.score.join('  -  '),L+W*.30,T+1*u,W*.40,28*u,23,C.gold,'center');
-  this.label(clock+'  '+(m.half===2?'2ND':'1ST'),L+W*.31,T+26*u,W*.38,15*u,10,C.cream,'center');
-  const actionW=compact?42*u:62*u,ay=T+Math.min(23*u,l.header-16*u),ah=Math.min(21*u,l.header-24*u);
+  this.label(clock+'  '+(m.half===2?'2ND':'1ST'),L+W*.31,T+Math.min(26*u,l.header-13*u),W*.38,13*u,10,C.cream,'center');
+  const actionW=compact?42*u:62*u,ay=T+Math.min(23*u,l.header-18*u),ah=Math.min(21*u,l.header-20*u);
   this.button(s.paused?'PLAY':'PAUSE',L+14*u,ay,actionW,ah,()=>{s.paused=!s.paused;this.refresh();},s.phase==='match');
   this.button(s.speed+'×',R-actionW-14*u,ay,actionW,ah,()=>{s.speed=s.speed===1?2:s.speed===2?4:1;this.refresh();},s.phase==='match');
   const hudY=q.y+q.h;this.rect(L,hudY,W,B-hudY,C.navy);this.rect(L,hudY,W,2*u,C.line);
@@ -173,12 +173,12 @@ export class Sunday{
   });
   if(s.phase==='halftime'||s.phase==='result'){
    this.buttons=[];this.rect(L,T,W,this.v.height,[.055,.085,.105,.96]);
-   const w=Math.min(W-24*u,430*u),x=L+(W-w)/2,y=T+this.v.height*.20,a=m.stats[0],b=m.stats[1];
-   this.label(s.phase==='halftime'?'HALF TIME':m.score[0]>m.score[1]?'VICTORY':m.score[0]<m.score[1]?'DEFEAT':'FULL TIME · DRAW',x,y,w,45*u,28,C.gold,'center');
-   this.label(m.score.join('  -  '),x,y+49*u,w,50*u,36,C.cream,'center');
-   this.label('SHOTS   '+a.shots+'  /  '+b.shots+'\nPASSES   '+a.completed+'  /  '+b.completed+'\nPOWERS USED   '+state.used.length+' / 6',x,y+104*u,w,73*u,13,C.cream,'center');
-   this.button(s.phase==='halftime'?'SECOND HALF':'PLAY AGAIN',x,y+182*u,w,38*u,()=>s.phase==='halftime'?this.resumeHalf():this.startAuto(),true,true);
-   this.button('MAIN MENU',x,y+230*u,w,30*u,()=>this.exitAuto());
+   const k=Math.min(1,this.v.height/(300*u)),d=u*k,w=Math.min(W-24*u,430*u),x=L+(W-w)/2,y=T+Math.max(8*u,(this.v.height-260*d)/2),a=m.stats[0],b=m.stats[1];
+   this.label(s.phase==='halftime'?'HALF TIME':m.score[0]>m.score[1]?'VICTORY':m.score[0]<m.score[1]?'DEFEAT':'FULL TIME · DRAW',x,y,w,45*d,28*k,C.gold,'center');
+   this.label(m.score.join('  -  '),x,y+49*d,w,50*d,36*k,C.cream,'center');
+   this.label('SHOTS   '+a.shots+'  /  '+b.shots+'\nPASSES   '+a.completed+'  /  '+b.completed+'\nPOWERS USED   '+state.used.length+' / 6',x,y+104*d,w,73*d,13*k,C.cream,'center');
+   this.button(s.phase==='halftime'?'SECOND HALF':'PLAY AGAIN',x,y+182*d,w,38*d,()=>s.phase==='halftime'?this.resumeHalf():this.startAuto(),true,true);
+   this.button('MAIN MENU',x,y+230*d,w,30*d,()=>this.exitAuto());
   }
  }
  selectPower(id){
