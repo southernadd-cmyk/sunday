@@ -1,4 +1,4 @@
-name: 540-match tactical tournament
+name: 720-match tactical tournament
 on:
   workflow_dispatch:
   pull_request:
@@ -8,7 +8,7 @@ permissions:
 jobs:
   matches:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
@@ -51,7 +51,9 @@ jobs:
           pattern: tournament-*
           path: results
           merge-multiple: true
-      - run: node scripts/engine-evaluation/tactical-tournament.mjs aggregate results/tournament-*.json | tee tournament-report.txt
+      - name: Enforce aggregate performance and shot-selection gates
+        shell: bash
+        run: node scripts/engine-evaluation/tactical-tournament.mjs aggregate results/tournament-*.json | tee tournament-report.txt
       - run: cat tournament-report.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:

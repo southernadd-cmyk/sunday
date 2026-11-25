@@ -166,7 +166,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
    const opponents=this.players.filter(p=>p.team!==taker.team&&!p.isSentOff);
    flow.freeKicks.probed++;
    if(options.testHooks&&options.forceCombination)return null;
-   const result=planDirectFreeKick({from,goal,wall:this.freekickWallPlayers||[],defenders:opponents.filter(p=>p.role!=='GK'&&!p.isInWall),keeper:opponents.find(p=>p.role==='GK'),speed:estimateShotGroundSpeed(taker),shooting:taker.effectiveShooting||65,accuracy:taker.effectiveAccuracy||70,predict:predict3D,variedDelivery:options.deliveryRoutines!==false});
+   const result=planDirectFreeKick({from,goal,wall:this.freekickWallPlayers||[],defenders:opponents.filter(p=>p.role!=='GK'&&!p.isInWall),keeper:opponents.find(p=>p.role==='GK'),speed:estimateShotGroundSpeed(taker),shooting:taker.effectiveShooting||65,accuracy:taker.effectiveAccuracy||70,predict:predict3D,balancedSelection:options.balancedSelection!==false,variedDelivery:options.deliveryRoutines!==false});
    return result;
   };
   sim.sundayPrepareLayoff=function(taker,target){
@@ -184,10 +184,10 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
    if(p!==expected){layoff=null;return null;}
    const right=this.isSecondHalf()?p.team==='B':p.team==='A',goal=this.getGoals()[right?'right':'left'];
    const from={x:p.x,y:p.y},opponents=this.players.filter(q=>q.team!==p.team&&!q.isSentOff);
-   const shot=planDirectFreeKick({from,goal,defenders:opponents.filter(q=>q.role!=='GK'),keeper:opponents.find(q=>q.role==='GK'),speed:estimateShotGroundSpeed(p),shooting:p.effectiveShooting||65,accuracy:p.effectiveAccuracy||70,predict:predict3D});
+   const shot=planDirectFreeKick({from,goal,defenders:opponents.filter(q=>q.role!=='GK'),keeper:opponents.find(q=>q.role==='GK'),speed:estimateShotGroundSpeed(p),shooting:p.effectiveShooting||65,accuracy:p.effectiveAccuracy||70,predict:predict3D,balancedSelection:options.balancedSelection!==false});
    if(layoff.stage==='first'&&!layoff.taker.isSentOff){
     const mate=layoff.taker,aim={x:mate.x,y:mate.y},dist=Math.hypot(aim.x-p.x,aim.y-p.y);
-    const returnShot=dist>1.8&&dist<8&&isPassSafeFromAllOpponents(from,aim,mate,opponents,estimatePassGroundSpeed(from,aim,p,'short'))?planDirectFreeKick({from:aim,goal,defenders:opponents.filter(q=>q.role!=='GK'),keeper:opponents.find(q=>q.role==='GK'),speed:estimateShotGroundSpeed(mate),shooting:mate.effectiveShooting||65,accuracy:mate.effectiveAccuracy||70,predict:predict3D}):null;
+    const returnShot=dist>1.8&&dist<8&&isPassSafeFromAllOpponents(from,aim,mate,opponents,estimatePassGroundSpeed(from,aim,p,'short'))?planDirectFreeKick({from:aim,goal,defenders:opponents.filter(q=>q.role!=='GK'),keeper:opponents.find(q=>q.role==='GK'),speed:estimateShotGroundSpeed(mate),shooting:mate.effectiveShooting||65,accuracy:mate.effectiveAccuracy||70,predict:predict3D,balancedSelection:options.balancedSelection!==false}):null;
     if(returnShot&&(!shot||returnShot.score>shot.score+.08)){
      layoff.stage='return';layoff.until=frames+55;flow.freeKicks.returnAttempts++;
      return {action:'pass',target:mate,aim};

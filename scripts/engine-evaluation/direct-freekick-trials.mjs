@@ -38,7 +38,16 @@ for(const team of ['A','B'])for(const half of [1,2])for(const c of scenarios){
 assert.equal(rows.length,60);
 const sum={};
 for(const row of rows)for(const [k,v] of Object.entries(row.stats))if(typeof v==='number')sum[k]=(sum[k]||0)+v;
-console.log('DIRECT_TRIALS '+JSON.stringify({seed,count:rows.length,sum}));
+const outcomes={};
+for(const row of rows){
+ if(row.choice.action!=='shoot')continue;
+ const routine=row.choice.routine;
+ const group=outcomes[routine]??={attempts:0};
+ group.attempts++;
+ const outcome=row.outcome||'unclassified';
+ group[outcome]=(group[outcome]||0)+1;
+}
+console.log('DIRECT_TRIALS '+JSON.stringify({seed,count:rows.length,sum,outcomes}));
 assert.ok(sum.releasedShots>=8,'At least eight real shots per 60 restart scenarios');
 assert.ok(sum.shotGoals+sum.shotSaves>0,'Shots must sometimes reach goal or keeper');
 assert.ok(sum.dipped>0,'At least one dipped direct free kick must be selected');
