@@ -48,8 +48,8 @@ export function makeMatch(seed=1,deck=DEFAULT,level=0,halfSeconds=HALF){
  case 'hound':p.press=3;ok=true;break;
  case 'keeper':if(m.ball.owner===null&&Math.abs(m.ball.x-(p.team?W:0))<90){p.press=1.1;ok=true}break;
  }
- if(ok){m.events.push({id:cause.id,time:m.time,kind:'rule',team:p.team,player:p.id,detail:rule.name,link:parent?.id??null});if(m.events.length>200)m.events.shift();if(!p.team){m.chain=cause.depth;m.best=Math.max(m.best,m.chain);if(cause.depth>1)m.stats[0].combos++;}}else p.ruleCool=0;return ok}
- function receive(p){let f=m.ball.flight;Object.assign(m.ball,{owner:p.id,vx:0,vy:0,flight:null});p.cool=.28;let event='receive';if(f){if(f.team===p.team&&f.from!==p.id&&f.type!=='shot'){m.stats[p.team].completed++;if(f.bounces)m.stats[p.team].banks++}else if(f.team!==p.team){if(f.type==='shot'&&p.role===0){m.stats[p.team].saves++;event='save'}else{m.stats[p.team].tackles++;event='win'}}if(f.type==='shot'&&p.role!==0&&f.team===p.team)event='rebound';log(event,p,'',f.cause?.id??null)}trigger(p,event,f?.team===p.team?f.cause:null)}
+ if(ok){m.events.push({id:cause.id,time:m.time,kind:'rule',team:p.team,player:p.id,detail:rule.name,link:parent?.id??null});if(m.events.length>200)m.events.shift();if(cause.depth>1)m.stats[p.team].combos++;if(!p.team){m.chain=cause.depth;m.best=Math.max(m.best,m.chain);}}else p.ruleCool=0;return ok}
+ function receive(p){let f=m.ball.flight;Object.assign(m.ball,{owner:p.id,vx:0,vy:0,flight:null});p.cool=.28;let event='receive';if(f){if(f.team===p.team&&f.from!==p.id&&f.type!=='shot'){m.stats[p.team].completed++;if(f.bounces)m.stats[p.team].banks++}else if(f.team!==p.team){if(f.type==='shot'&&p.role===0){m.stats[p.team].saves++;event='save'}else{m.stats[p.team].tackles++;event='win'}}if(f.type==='shot'&&p.role!==0&&f.team===p.team&&f.deflected)event='rebound';log(event,p,'',f.cause?.id??null)}trigger(p,event,f?.team===p.team?f.cause:null)}
  function goal(t){m.score[t]++;m.stats[t].goals++;log('goal',{team:t},m.score.join('–'),m.ball.flight?.cause?.id??null);kickoff(1-t)}
  function command(id){if(m.phase!=='play'||m.tokens<=0||m.call)return false;if(!['left','right','hunt','reset'].includes(id))return false;m.tokens--;m.call={id,until:m.time+6};log('call',{team:0},id);return true}
  function move(p,dt){let b=m.ball,o=m.players[b.owner],sgn=dir(p),[hx,hy]=formations[p.role];if(p.team)hx=W-hx;let attack=o?.team===p.team,closest=m.players.filter(q=>q.team===p.team&&q.role!==0).sort((a,b)=>d(a,m.ball)-d(b,m.ball))[0];let x=hx,y=hy;
@@ -67,9 +67,9 @@ export function makeMatch(seed=1,deck=DEFAULT,level=0,halfSeconds=HALF){
  if(b.y<5||b.y>H-5){b.y=clamp(b.y,5,H-5);b.vy*=-.88;if(f)f.bounces++}
  if(b.x<5||b.x>W-5){if(Math.abs(b.y-H/2)<GOAL){goal(b.x>W/2?0:1);return}b.x=clamp(b.x,5,W-5);b.vx*=-.82;if(f)f.bounces++}
  let candidates=m.players.filter(p=>p.cool===0&&d(p,b)<(p.role===0?11:7)&&!(f?.from===p.id&&f.age<.45));
- if(candidates.length)receive(candidates.sort((p,q)=>d(p,m.ball)-d(q,m.ball))[0]);
+ if(candidates.length){let p=candidates.sort((p,q)=>d(p,m.ball)-d(q,m.ball))[0];if(f?.type==='shot'&&f.team!==p.team&&!f.deflected&&(p.role===0?rand()<.43:rand()<.65)){if(p.role===0)m.stats[p.team].saves++;else m.stats[p.team].tackles++;let [nx,ny]=norm(-dir({team:f.team})*.7,(p.y<H/2?-1:1)*(.3+rand()));b.vx=nx*115;b.vy=ny*115;f.deflected=true;f.from=p.id;f.age=0;p.cool=.5;log('parry',p,'Loose ball!');}else receive(p);}
  }
- function substitute(slot,rule){if(m.phase!=='play'||m.subUsed||slot<0||slot>4||!RULES[rule])return false;m.subUsed=true;m.deck[slot]=rule;let p=m.players[slot];p.rule=rule;p.energy=1;p.ruleCool=0;log('sub',p,RULES[rule].name);return true}
+ function substitute(slot,rule){if(m.phase!=='play'||m.subUsed||!Number.isInteger(slot)||slot<0||slot>4||!RULES[rule]||RULES[rule].role!==['GK','FIXO','ALA','ALA','PIVOT'][slot])return false;m.subUsed=true;m.deck[slot]=rule;let p=m.players[slot];p.rule=rule;p.energy=1;p.ruleCool=0;log('sub',p,RULES[rule].name);return true}
  function resume(deck=m.deck){if(m.phase!=='half')return false;m.deck=[...deck];m.half=2;m.phase='play';m.tokens=3;m.call=null;kickoff(1);return true}
  return Object.assign(m,{step,resume,command,substitute,debug:{kick,trigger,receive,goal,target}});
 }
