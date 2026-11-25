@@ -1,10 +1,11 @@
 // SUNDAY adapter for Soccer-JS, pinned upstream revision in engine-evaluation.yml.
 // This file is copied to the upstream checkout and bundled as a browser ESM.
 // No upstream rendering, audio, network fetches, or DOM controls are needed.
-import {systemAssignment,resolveSystem,systemCanPress} from './five-tactics.js';
+import {systemAssignment,resolveSystem,systemCanPress,freeKickLayout} from './five-tactics.js';
 import {possessionIntent,possessionAction} from './possession-intent.js';
-const {Simulator}=require('./kernel/providers/simulator/simulator.js');
+const {Simulator,MatchStates}=require('./kernel/providers/simulator/simulator.js');
 const {Settings}=require('./kernel/settings.js');
+const {clearWallPlayers}=require('./kernel/core/lib/freekick_wall.js');
 const {Time}=require('./kernel/core/lib/time.js');
 const {Utils}=require('./kernel/core/lib/utils.js');
 const statsPreset=require('./presets/player_stats.json');
@@ -55,7 +56,7 @@ function teamSettings(traits){
 // Five-a-side house rules: both teams use the same lively base profile.
 // All decisions remain in Soccer-JS; the adapter only changes rules and knobs.
 const FIVE_PROFILE={FORMATION_HOLD:.43,ATTACK_SUPPORT_INTENSITY:.84,ATTACK_SUPPORT_OWN_HALF_BLEND:.62,ATTACK_SUPPORT_FORM_PULL:.78,ATTACK_SUPPORT_PUSH_SCALE:1.15,ATTACK_DEPTH_BIAS_REF:10,DEFENSIVE_PRESS_INTENSITY:.65,PASS_AGGRESSION:.76,SUPPORT_WIDTH:.72,SHOOT_RANGE_REF:46,SHOOT_CONTESTED_CHANCE:.45,SHOOT_FORCE_BLOCKED_CHANCE:.18,SHORT_PASS_MIN_DIST:2,SHORT_PASS_MAX_DIST:18,LONG_PASS_MIN_DIST:16,LONG_PASS_MAX_DIST:35,GK_HOLD_DURATION:.65,COUNTERPRESS_MAX_SURGE:2,PRESS_MAX_SECONDARY_DANGER:1,BODY_FOUL_CHANCE:.19,BODY_SUCCESS_FOUL_CHANCE:.07,SLIDE_FOUL_CHANCE:.09,FOOT_FOUL_CHANCE:.02};
-export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,format=11,profile='express',systems=['diamond','diamond']){
+export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,format=11,profile='express',systems=['diamond','diamond'],options={}){
  // Soccer-JS uses shared Settings; this proof runs one active match at a time.
  if(!Array.isArray(systems)||systems.length!==2)throw Error('Select one tactical system per team');
  const systemIds=systems.slice();const teamSystems=systemIds.map(resolveSystem);
@@ -69,7 +70,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  let home=baseHome;
  Settings.HEADLESS=true;Settings.soundsMuted=true;Settings.TIME_SPEED=1;
  Settings.FIELD_SIZE_MULTIPLIER=format===5?.60:1;
- Settings.SUNDAY_NO_OFFSIDE=arcade;Settings.SUNDAY_EXPRESS=express;Settings.SUNDAY_SHAPE=shape;Settings.SUNDAY_ATTACK=attack;Settings.SUNDAY_ZONES=zones;Settings.SUNDAY_INTENT=intent;Settings.SUNDAY_FIVE=format===5;
+ Settings.SUNDAY_NO_OFFSIDE=arcade;Settings.SUNDAY_EXPRESS=express;Settings.SUNDAY_SHAPE=shape;Settings.SUNDAY_ATTACK=attack;Settings.SUNDAY_ZONES=zones;Settings.SUNDAY_INTENT=intent;Settings.SUNDAY_FREEKICK=intent&&options.freeKicks!==false;Settings.SUNDAY_FIVE=format===5;
  Settings.MATCH_DURATION=duration;Settings.AI.A=home;Settings.AI.B=away;Settings.AI.dynamicStrategyShifting=false;
  Settings.batchConfig={teamA:'England',teamB:'Scotland',formationA:format===5?'SUNDAY-5':'4-4-2',formationB:format===5?'SUNDAY-5':'4-3-3'};
  Settings.app={camX:0,camY:0,canvas:{width:720,height:528}};
@@ -83,7 +84,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  let lastCompleted=null,lastThirdSide=null;
  let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
  const originals=new Map();
- const flow={intentDecisions:0,intentCounts:{},intentActions:{},teamAssignments:[{},{}],teamIntentActions:[{},{}],assignmentTicks:0,assignmentCounts:{},kickoffTicks:0,kickoffCrowdedTicks:0,finalThirdEntries:0,createdShots:0,crowdedTicks:0,shapeTicks:0,spreadSum:0,ownedTicks:0,threePassChains:0,returnPasses:0,shotZones:[0,0,0],playTicks:0,deadTicks:0,boardBounces:0,turnovers:0,shots:0,goals:0,longestQuiet:0,quiet:0,phases:{}};
+ const flow={freeKicks:{awarded:0,planned:0,shots:0,passes:0,releasedShots:0,releasedPasses:0,completedPasses:0,interceptedPasses:0,indirect:0,wallPlayers:0,clearanceViolations:0,byTeam:[0,0]},intentDecisions:0,intentCounts:{},intentActions:{},teamAssignments:[{},{}],teamIntentActions:[{},{}],assignmentTicks:0,assignmentCounts:{},kickoffTicks:0,kickoffCrowdedTicks:0,finalThirdEntries:0,createdShots:0,crowdedTicks:0,shapeTicks:0,spreadSum:0,ownedTicks:0,threePassChains:0,returnPasses:0,shotZones:[0,0,0],playTicks:0,deadTicks:0,boardBounces:0,turnovers:0,shots:0,goals:0,longestQuiet:0,quiet:0,phases:{}};
  const state={flow,systems:systemIds,profile:intent?'intent':zones?'zones':attack?'attack':shape?'shape':express?'express':arcade?'arcade':'original',duration,time:0,matchSeconds:0,half:1,finished:false,phase:'kickoff',actors:[],ball:{x:0,z:0,y:0},score:[0,0],stats,events,step,upstream:'soccer-js',stepSeconds:SOCCER_STEP,chips:[],charge:0,chipRevision:0,grantChip,useChip,canUseChip,chipStats:{shotsPowered:0,combos:0,used:0,reloads:0},playerAttributes:()=>sim.players.map(p=>({team:p.team,role:p.role,...p.stats,currentStamina:p.currentStamina}))};
  // Contextual decision hook: the upstream Dribble state still owns timing,
  // movement, kick windup, and the actual pass/shot state transitions.
@@ -108,6 +109,55 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   };
   sim.sundayResetIntent=function(){plan=null;planTeam=null;lastOwner=null;state.intent=null;};
  }
+ // Preserve upstream fouls, restart FSM and actual kick physics, replacing
+ // only the eleven-a-side free-kick walk targets and choice policy.
+ if(intent&&options.freeKicks!==false){
+  const setup=sim.setupSetPiecePositions.bind(sim);
+  sim.setupSetPiecePositions=function(type,sideName,kickingTeam,...rest){
+   const before=this.players.filter(p=>!p.isSentOff).map(p=>({p,x:p.x,y:p.y}));
+   setup(type,sideName,kickingTeam,...rest);
+   if(type!=='freekick'){this.sundayFreekickPlan=null;this.sundayFreekickTaker=null;return;}
+   this.sundayFreekickPlan=null;this.sundayFreekickTaker=null;
+   const right=this.isSecondHalf()?kickingTeam==='B':kickingTeam==='A';
+   const flip=(x,y)=>right?{x,y}:{x:field.width-x,y:field.height-y};
+   const bx=this.setPieceX,by=this.setPieceY,ball=flip(bx,by);
+   const attackers=before.filter(q=>q.p.team===kickingTeam&&q.p.role!=='GK').sort((a,b)=>Math.hypot(a.x-bx,a.y-by)-Math.hypot(b.x-bx,b.y-by));
+   const defenders=before.filter(q=>q.p.team!==kickingTeam&&q.p.role!=='GK').sort((a,b)=>Math.hypot(a.x-bx,a.y-by)-Math.hypot(b.x-bx,b.y-by));
+   clearWallPlayers(this.freekickWallPlayers);this.freekickWallPlayers=[];
+   if(!attackers.length)return;
+   const taker=attackers.shift().p;this.sundayFreekickTaker=taker;
+   const plan=freeKickLayout({width:field.width,height:field.height,...ball,attackers:attackers.map(q=>q.p),defenders:defenders.map(q=>q.p),indirect:!!this.setPieceIndirect});
+   this.sundayFreekickPlan=plan;
+   const place=(p,point,wall=false)=>{
+    const target=flip(point.x,point.y);
+    p.setPieceTarget=target;p.isWalkingToSetPiece=true;
+    if(wall){p.isInWall=true;p.wallHoldX=target.x;p.wallHoldY=target.y;p.wallJumpTimer=0;p.wallJumpActive=false;p.wallJumpVz=0;this.freekickWallPlayers.push(p);}
+   };
+   place(taker,ball);taker.orientation=right?2:6;
+   for(const p of [...plan.attack,...plan.defend])place(p.id,p);
+   for(const p of plan.wall){place(p.id,p,true);p.id.orientation=right?6:2;}
+   this.ball.owner=null;this.ball.x=bx;this.ball.y=by;
+   const fk=flow.freeKicks;fk.planned++;fk.wallPlayers+=plan.wall.length;
+   for(const p of [...plan.wall,...plan.defend])if(Math.hypot(p.x-ball.x,p.y-ball.y)<plan.clearance-.02)fk.clearanceViolations++;
+  };
+ }
+ // Exposed only to deterministic scenario tests, not ordinary gameplay.
+ if(options.testHooks){
+  state.forceFreeKick=({team='A',depth=.45,lateral=.5,half=1,indirect=false}={})=>{
+   if(half===2&&!sim.isSecondHalf()){sim.matchTimer=2700;sim.halfTimeTriggered=true;sim.swapSides();}
+   const right=sim.isSecondHalf()?team==='B':team==='A';
+   sim.setPieceX=(right?depth:1-depth)*field.width;sim.setPieceY=(right?lateral:1-lateral)*field.height;
+   sim.setPieceKickingTeam=team;sim.setPieceType='freekick';sim.setPieceSide=sim.setPieceX<field.centerX?'left':'right';sim.setPieceIndirect=indirect;
+   sim.ball.owner=null;sim.ball.x=sim.setPieceX;sim.ball.y=sim.setPieceY;
+   sim.ball.vx=0;sim.ball.vy=0;sim.ball.vz=0;sim.ball.z=0;
+   sim.setupSetPiecePositions('freekick',sim.setPieceSide,team);sim.fsm.changeState(MatchStates.Freekick);snapshot();
+   const plan=sim.sundayFreekickPlan;return plan?{direct:plan.direct,wall:plan.wall.length,attack:plan.attack.length,defend:plan.defend.length,goalX:right?field.width:0}:null;
+  };
+ }
+ sim.sundayOnFreekickChoice=function(action,team,aim){
+  flow.freeKicks[action==='shoot'?'shots':'passes']++;
+  state.lastFreeKick={action,team,aim:aim?{x:aim.x,y:aim.y}:null,half:sim.isSecondHalf()?2:1};
+ };
  // Let the original goal geometry decide whether a shot really crosses the line.
  // Only non-scoring exits reflect; no invented goals, teleports, or new AI.
  if(arcade){
@@ -285,23 +335,25 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   // Reapply team-local knobs before the tick; upstream owns every decision.
   Settings.AI.A=home;Settings.AI.B=away;Time.deltaTime=SOCCER_STEP;
   for(const p of sim.players){if(p.team==='A'&&!originals.has(p))applyPlayer(p);if(p.sundayTouchGrace>0)p.sundayTouchGrace=Math.max(0,p.sundayTouchGrace-SOCCER_STEP);}
-  const before=sim.ball.owner,beforeShot=sim.ball.isShot,phaseBefore=sim.matchState,shotBefore=flow.shots;sim.updateAll();frames++;
+  const before=sim.ball.owner,beforeShot=sim.ball.isShot,phaseBefore=sim.matchState,wasFreeKick=sim.setPieceType==='freekick',shotBefore=flow.shots;sim.updateAll();frames++;
   if(arcade&&sim.matchState!==phaseBefore){const limits={kickoff:1,goal:2,halftime:2.5,freekick:1.1,penalty:1.3,card:1.2};const limit=limits[sim.matchState];if(limit!=null&&sim.stateTimer>limit)sim.stateTimer=limit;}
   snapshot();rocketKick=false;
   flow.phases[phaseBefore]=(flow.phases[phaseBefore]||0)+1;if(phaseBefore==='kickoff'){flow.kickoffTicks++;if(sim.players.filter(p=>p.role!=='GK'&&Math.hypot(p.x-field.centerX,p.y-field.centerY)<field.width*.09).length>2)flow.kickoffCrowdedTicks++;}if(phaseBefore==='play'){flow.playTicks++;if(zones&&frames%5===0){for(const p of sim.players){if(p.sundayAssignment&&!p.isSentOff){flow.assignmentTicks++;flow.assignmentCounts[p.sundayAssignment]=(flow.assignmentCounts[p.sundayAssignment]||0)+1;const counts=flow.teamAssignments[side(p.team)];counts[p.sundayAssignment]=(counts[p.sundayAssignment]||0)+1;}}}const owner=sim.ball.owner;if(owner){const right=sim.isSecondHalf()?owner.team==='B':owner.team==='A';const third=right?owner.x>field.width*2/3:owner.x<field.width/3;if(third&&lastThirdSide!==owner.team){flow.finalThirdEntries++;lastThirdSide=owner.team;}else if(!third)lastThirdSide=null;}}if(phaseBefore==='play'){if(sim.ball.owner)flow.ownedTicks++;if(frames%5===0){flow.shapeTicks++;const players=sim.players.filter(p=>p.role!=='GK'&&!p.isSentOff);const near=players.filter(p=>Math.hypot(p.x-sim.ball.x,p.y-sim.ball.y)<field.height*.13).length;if(near>=4)flow.crowdedTicks++;for(const key of ['A','B']){const ps=players.filter(p=>p.team===key);let n=0,d=0;for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){d+=Math.hypot(ps[i].x-ps[j].x,ps[i].y-ps[j].y)/field.height;n++;}flow.spreadSum+=n?d/n/2:0;}}flow.quiet=flow.shots>shotBefore?0:flow.quiet+SOCCER_STEP;flow.longestQuiet=Math.max(flow.longestQuiet,flow.quiet);}else flow.deadTicks++;
   let changed=false;for(const chip of state.chips){if((chip.status==='active'&&(state.time>=chip.until||state.phase==='halftime'||state.finished))||(chip.status==='armed'&&(state.phase==='halftime'||state.finished))){chip.status='spent';changed=true;}}
   if(changed){rebuildHome();state.chipRevision++;}
   const after=sim.ball.owner;
+  const releasedFreeKick=wasFreeKick&&sim.setPieceType!=='freekick';
+  if(releasedFreeKick&&flow.shots>shotBefore)flow.freeKicks.releasedShots++;
   // Count a single actual pass launch, not a transient AI state. A pending
   // flight may span many ticks and an attempted pass can be aborted before contact.
   const kicker=sim.ball.lastKicker;
   if(sim.ball.passFromX!=null&&kicker&&!after){
    const key=String(sim.players.indexOf(kicker))+':'+sim.ball.passFromX+':'+sim.ball.passFromY;
-   if(key!==lastLaunch){lastLaunch=key;pending={kicker,team:kicker.team};stats[side(kicker.team)].passes++;}
+   if(key!==lastLaunch){lastLaunch=key;pending={kicker,team:kicker.team,freeKick:releasedFreeKick};if(releasedFreeKick)flow.freeKicks.releasedPasses++;stats[side(kicker.team)].passes++;}
   }else if(after||sim.ball.passFromX==null){lastLaunch=null;}
   if(after&&pending){
-   if(after!==pending.kicker&&after.team===pending.team){const a=stats[side(after.team)];a.completed++;if(lastCompleted&&lastCompleted.from===after&&lastCompleted.to===pending.kicker&&frames-lastCompleted.frame<100){flow.returnPasses++;event('QUICK RETURN PASS',after.team,'play');}lastCompleted={from:pending.kicker,to:after,frame:frames};if(chainSide!==side(after.team)){chain=0;chainSide=side(after.team);}chain++;if(chain===3)flow.threePassChains++;a.bestChain=Math.max(a.bestChain,chain);if(after.team==='A'){gainCharge();comboPass();}else breakCombo();}
-   else if(after.team!==pending.team){stats[side(after.team)].interceptions++;event('INTERCEPTION',after.team,'tackle');if(after.team==='A')gainCharge();chain=0;chainSide=-1;breakCombo();}
+   if(after!==pending.kicker&&after.team===pending.team){const a=stats[side(after.team)];a.completed++;if(pending.freeKick)flow.freeKicks.completedPasses++;if(lastCompleted&&lastCompleted.from===after&&lastCompleted.to===pending.kicker&&frames-lastCompleted.frame<100){flow.returnPasses++;event('QUICK RETURN PASS',after.team,'play');}lastCompleted={from:pending.kicker,to:after,frame:frames};if(chainSide!==side(after.team)){chain=0;chainSide=side(after.team);}chain++;if(chain===3)flow.threePassChains++;a.bestChain=Math.max(a.bestChain,chain);if(after.team==='A'){gainCharge();comboPass();}else breakCombo();}
+   else if(after.team!==pending.team){if(pending.freeKick)flow.freeKicks.interceptedPasses++;stats[side(after.team)].interceptions++;event('INTERCEPTION',after.team,'tackle');if(after.team==='A')gainCharge();chain=0;chainSide=-1;breakCombo();}
    pending=null;
   }
   if(before&&after&&before.team!==after.team){flow.turnovers++;lastCompleted=null;chain=0;chainSide=-1;}if(after?.team==='B')breakCombo();
@@ -309,7 +361,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   if(state.score[0]!==lastScore[0]||state.score[1]!==lastScore[1]){flow.goals++;lastCompleted=null;lastThirdSide=null;const team=state.score[0]>lastScore[0]?'A':'B';event('GOAL! '+state.score.join('–'),team,'goal');lastScore=[...state.score];chain=0;chainSide=-1;breakCombo();}
   const phase=sim.matchState;
   if(intent&&phase!=='play')sim.sundayResetIntent();
-  if(phase!==lastState){if(['corner','goalkick','throwin','freekick','offside','penalty','halftime','fulltime','kickoff'].includes(phase)){event(phase.toUpperCase(),sim.setPieceKickingTeam,'match');pending=null;lastLaunch=null;chain=0;chainSide=-1;breakCombo();}lastState=phase;}
+  if(phase!==lastState){if(phase==='freekick'){flow.freeKicks.awarded++;if(sim.setPieceIndirect)flow.freeKicks.indirect++;flow.freeKicks.byTeam[side(sim.setPieceKickingTeam)]++;}if(['corner','goalkick','throwin','freekick','offside','penalty','halftime','fulltime','kickoff'].includes(phase)){event(phase.toUpperCase(),sim.setPieceKickingTeam,'match');pending=null;lastLaunch=null;chain=0;chainSide=-1;breakCombo();}lastState=phase;}
  }
  snapshot();state.format=format;if(format===5&&state.actors.length!==10)throw Error('Expected exactly ten players, got '+state.actors.length);event('KICK OFF',null,'match');return state;
 }
