@@ -1,15 +1,15 @@
-# SUNDAY — Build the team. Watch the football.
+# SUNDAY — Anything goes.
 
-A Sunday league football autobattler in fictional Saltmere. Draft football behaviours, combine them and watch a continuous match on the Amiga-inspired pitch.
+Five-a-side football in a fictional British leisure centre. The football is automatic; you change the players and the pitch.
 
-[Play SUNDAY](https://southernadd-cmyk.github.io/sunday/) · [Native Construct 3 game](https://southernadd-cmyk.github.io/sunday/construct/) · [Download Construct 3 project](https://southernadd-cmyk.github.io/sunday/downloads/SUNDAY-Construct3.c3p)
+[Play SUNDAY](https://southernadd-cmyk.github.io/sunday/) · [Native Construct game](https://southernadd-cmyk.github.io/sunday/construct/) · [Match Lab](https://southernadd-cmyk.github.io/sunday/pitchlab.html) · [Construct 3 project](https://southernadd-cmyk.github.io/sunday/downloads/SUNDAY-Construct3.c3p)
 
 ## How to play
 
-Select Start Game and pick a chip from three offers. Both teams play autonomously. Activate chips from the live match HUD; different chips can overlap. Passes, ball wins and saves earn charge; spend four to reload a spent chip once per fixture. At half-time choose another chip. Your collection carries into the next fixture and starts ready again. Pause or use 1×, 2× and 4× viewing speed.
+Start Game launches a five-a-side match in Construct. Select one of six mutations (or press 1–6). Player and pitch targeting freezes play while you select a target; Escape cancels. Squeeze activates immediately. Each power can be used once in a match and lasts ten simulation seconds at 1× speed. Effects can overlap. Space pauses; use the speed control to change playback. Half-time pauses until you choose Second Half.
 
-The original drag-to-move game is no longer available through the public interface. Its historical rules remain in the repository for regression coverage while the autoplay engine develops.
+This is a playable mutation prototype; drafting and long-term run progression are not yet implemented. The Match Lab preserves fixed and adaptive football evaluation controls.
 
 ## Development
 
-`npm ci`, `npm test`, `npm run build`. The root route forwards to the native Construct export. The match simulation uses the pinned MIT-licensed [Soccer-JS engine](https://github.com/haeretici/soccer-js), bundled at build time. Each match simulates 300 seconds of football at a default 4× simulation rate (plus stoppages), with full 11-a-side teams. The playback controls are relative to that base rate. `npm ci` followed by `npm test` or `npm run build` fetches the pinned upstream and generates the local bundle; no external service is required during gameplay. See [Construct instructions](construct/README.md) and [engine evaluation](docs/AUTOPLAY_ENGINE_EVALUATION.md).
+`npm ci`, `npm test`, `npm run build`. The root opens the native Construct export. The pinned MIT-licensed [Soccer-JS engine](https://github.com/haeretici/soccer-js) is bundled at build time. The game's sprites, pitch, HUD and pointer controls are native Construct objects; the simulation remains in JavaScript. The owned project scripts are synchronized to the existing genuine web export. See [Construct instructions](construct/README.md).
