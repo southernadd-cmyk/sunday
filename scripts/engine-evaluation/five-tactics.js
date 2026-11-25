@@ -230,3 +230,32 @@ export function planDirectFreeKick({from,goal,wall=[],defenders=[],keeper=null,s
  // Keep a safe restart when all routes are poor rather than invent a shot.
  return selected&&selected.selectionScore>.58?selected:null;
 }
+
+// Review policy for a manager who sees only the score, clock, own stamina
+// and recent observable football. No knowledge of the opposing selection.
+export const ADAPTIVE_REVIEW_SECONDS=600;
+export const ADAPTIVE_DWELL_SECONDS=720;
+export function adaptiveTactic({current,base,second,goalDifference,stamina,window,lastChange=-Infinity}){
+ resolveSystem(current);resolveSystem(base);
+ const remaining=5400-second;
+ const hold={system:current,reason:'hold'};
+ if(second<600||remaining<180||second-lastChange<ADAPTIVE_DWELL_SECONDS)return hold;
+ const choose=(system,reason)=>system===current?hold:{system,reason};
+ const enough=window.controlSeconds>=1.2;
+ const underPressure=enough&&(window.opponentShots>=2&&window.opponentShots>window.shots||window.possessionShare<.36&&window.opponentEntries>=2);
+ const stale=enough&&window.shots===0&&window.controlSeconds>=2;
+ const opponentWide=enough&&window.opponentWideShare>.56&&window.opponentEntries>=2;
+ const highTurnovers=window.interceptions>=3&&window.opponentPasses>=3;
+ if(goalDifference<0&&remaining<=1500){
+  if(stamina<.43)return choose('direct','Chasing a goal with tired legs — release the forwards');
+  return choose(stamina>.66?'press':'direct','Chasing a late equaliser');
+ }
+ if(goalDifference>0&&remaining<=1500)return choose('counter','Protecting a late lead with deeper cover');
+ if(stamina<.50&&current==='press')return choose('diamond','Pressing legs are tiring — restore balanced shape');
+ if(underPressure)return choose('counter','Absorb sustained pressure and break into space');
+ if(opponentWide&&current!=='counter')return choose('wide','Match the opposition width');
+ if(stale&&goalDifference<=0)return choose(highTurnovers?'direct':'rotation','Create different passing and shooting angles');
+ if(highTurnovers&&stamina>.67&&goalDifference<=0)return choose('press','Exploit repeated opposition turnovers');
+ if(goalDifference===0&&enough&&window.possessionShare>.58&&window.shots>0&&window.opponentShots===0&&current!==base)return choose(base,'Return to the starting shape after regaining control');
+ return hold;
+}
