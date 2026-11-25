@@ -44,3 +44,58 @@ export function tacticalAssignment(role,mode,depth,lateral){
  const action=mode==='defend'?(role==='CB'?'cover':role==='CF'?'screen':'track'):role==='CB'?'recycle':role==='CF'?'threaten':near?'support':'run';
  return {x,y,action};
 }
+
+// Team-specific tactical systems. The original diamond is exactly unchanged.
+// Depths/lateral coordinates are relative to the team's attacking direction.
+// Roles are slots, not fixed real-world positions; movement uses engine steering.
+export const SYSTEMS=Object.freeze({
+ diamond:Object.freeze({name:'Diamond possession',formation:'1-2-1',description:'Balanced triangles and forward combinations',press:null,shotDepth:.69,shotCentral:.42,passGain:.035,lineGain:.13}),
+ press:Object.freeze({name:'High press',formation:'1-1-2',description:'Advanced pressure and quick attacks; space behind the press',press:.55,shotDepth:.69,shotCentral:.42,passGain:.025,lineGain:.09}),
+ counter:Object.freeze({name:'Counter-attack',formation:'2-1-1',description:'Deep cover with a high outlet and quick forward breaks',press:.23,shotDepth:.70,shotCentral:.42,passGain:.07,lineGain:.10}),
+ wide:Object.freeze({name:'Wide play',formation:'1-2-1',description:'Stretch the pitch and combine from wide channels',press:.38,shotDepth:.73,shotCentral:.52,passGain:.015,lineGain:.10}),
+ direct:Object.freeze({name:'Direct football',formation:'2-2',description:'Two forward outlets, progressive passes and earlier shots',press:.40,shotDepth:.69,shotCentral:.30,passGain:.06,lineGain:.07}),
+ rotation:Object.freeze({name:'Rotational football',formation:'Fluid diamond',description:'Ball-side overlaps and a pivot dropping into space',press:.40,shotDepth:.71,shotCentral:.45,passGain:.02,lineGain:.10})
+});
+export function resolveSystem(id='diamond'){
+ if(!Object.hasOwn(SYSTEMS,id))throw Error('Unknown tactical system: '+id);
+ return SYSTEMS[id];
+}
+export function systemAssignment(id,role,mode,depth,lateral){
+ resolveSystem(id);
+ const base=tacticalAssignment(role,mode,depth,lateral);
+ if(id==='diamond')return base;
+ const attack=mode==='attack',left=role==='LM',wing=left||role==='RM',near=left?lateral<=.5:lateral>=.5;
+ const lane=left?.20:.80;
+ let {x,y,action}=base;
+ if(id==='press'){
+  if(role==='CB'){x+=attack?.05:.09;action='high-cover';}
+  if(role==='CF'){x+=.045;y=.70;action=attack?'high-outlet':'press-screen';}
+  if(role==='LM'){x+=.12;y=.30;action=attack?'high-outlet':'press-screen';}
+  if(role==='RM'){x=depth-.05;y=.52;action=attack?'link':'screen';}
+ }else if(id==='counter'){
+  if(role==='CB'){x-=.06;y=.30;action='cover';}
+  if(role==='LM'){x=depth-(attack?.21:.27);y=.70;action='cover';}
+  if(role==='RM'){x=depth+(attack?.07:-.12);y=.52;action=attack?'release':'screen';}
+  if(role==='CF'){x=depth+(attack?.28:.13);action='break-outlet';}
+ }else if(id==='wide'){
+  if(wing){y=left?.09:.91;x=depth+(attack?(near?.08:.16):-.10);action=attack?'wide-outlet':'track';}
+  if(role==='CF'){x+=.04;y=.50;action='central-target';}
+ }else if(id==='direct'){
+  if(role==='CB'||role==='LM'){x=depth-.23;y=role==='CB'?.28:.72;action='cover';}
+  else{x=depth+(attack?.22:.10);y=role==='RM'?.30:.70;action=attack?'direct-outlet':'screen';}
+ }else if(id==='rotation'&&attack){
+  // Ball-side wing overlaps; the pivot drops diagonally to fill the vacated
+  // support slot. Far wing provides width and defender retains cover.
+  if(wing&&near){x=depth+.19;y=lane;action='overlap';}
+  if(wing&&!near){x=depth+.10;y=lane;action='wide-outlet';}
+  if(role==='CF'){x=depth+.025;y=lateral<.5?.65:.35;action='drop-link';}
+ }
+ return {x:clamp(x,.09,.92),y:clamp(y,.08,.92),action};
+}
+export function systemCanPress(id,{hasOpponentOwner,distance,depth}){
+ const config=resolveSystem(id);
+ // Always contest loose balls. Containment only changes off-ball pursuit
+ // against an owner, never tackles, speed or possession rules.
+ if(!hasOpponentOwner||config.press===null)return true;
+ return distance<=config.press||depth<.30;
+}
