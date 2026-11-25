@@ -6,6 +6,8 @@ test('compact restart positions, outlets, clearance and wall limits across pitch
  for(const depth of [.02,.12,.3,.45,.65,.75,.85,.95,.98])for(const lateral of [.02,.12,.3,.5,.7,.88,.98])for(const indirect of [false,true]){
   const x=60*depth,y=40*lateral,p=freeKickLayout({width:60,height:40,x,y,attackers:[0,1,2],defenders:[3,4,5,6],indirect});
   assert.equal(p.attack.length,3);assert.equal(p.wall.length+p.defend.length,4);
+  for(const q of p.attack.slice(0,2)){const d=Math.hypot(q.x-x,q.y-y);assert.ok(d>2.2&&d<3.8,'short outlet inside exclusion');}
+  assert.ok(Math.hypot(p.attack[0].x-p.attack[1].x,p.attack[0].y-p.attack[1].y)>2.1,'separate outlets');
   assert.ok(p.wall.length<=2);assert.ok(p.defend.length>=2);
   if(indirect||depth<.65)assert.equal(p.direct,false);
   for(const q of [...p.attack,...p.wall,...p.defend])assert.ok(q.x>=0&&q.x<=60&&q.y>=0&&q.y<=40);
