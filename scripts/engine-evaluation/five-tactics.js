@@ -115,15 +115,23 @@ export function freeKickLayout({width,height,x,y,attackers,defenders,indirect=fa
  // Prefer distinct outlets: a short inward diagonal, a forward runner and
  // a safety outlet. Never pile them onto the taker or each other.
  const inward=y<centre?1:-1;
+ // Put two playable outlets INSIDE the defenders' exclusion radius.
+ // The third attacker offers depth. Short restarts should be a two/three
+ // metre pass, not a lead ball into a marked player's running lane.
  const targets=[
-  [x+width*.08,y+inward*height*.20,'short-outlet'],
-  [x+width*.22,centre-inward*height*.20,'forward-outlet'],
-  [x-width*.16,centre+inward*height*.19,'safety-outlet']
+  [x+1.7,y+inward*2.2,'short-outlet'],
+  [x-2.6,y-inward*.5,'safety-outlet'],
+  [x+width*.18,centre-inward*height*.20,'forward-outlet']
  ];
  const attack=attackers.map((id,i)=>{
   const [tx,ty,action]=targets[i%targets.length];
-  const choices=[bound(tx,ty),bound(tx,ty+inward*height*.15),bound(x-width*.12,y+inward*height*.32),bound(x-width*.24,centre)];
-  const p=choices.find(p=>distance(p,ball)>2&&used.every(q=>distance(p,q)>1.8))||choices[0];used.push(p);
+  const desired=bound(tx,ty),choices=[desired];
+  for(const radius of i<2?[2.7,3.2,3.6]:[6,8,10])for(let j=0;j<24;j++){
+   const angle=j*Math.PI/12;choices.push(bound(x+Math.cos(angle)*radius,y+Math.sin(angle)*radius));
+  }
+  const legal=choices.filter(p=>distance(p,ball)>2.2&&(i>=2||distance(p,ball)<3.8)&&used.every(q=>distance(p,q)>2.1));
+  legal.sort((a,b)=>distance(a,desired)-distance(b,desired));
+  const p=legal[0]||desired;used.push(p);
   return {id,...p,action};
  });
  const walls=direct&&goalDist>clearance+1?Math.min(2,Math.max(0,defenders.length-2)):0;
