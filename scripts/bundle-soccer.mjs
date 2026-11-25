@@ -64,7 +64,7 @@ teamText=patch(teamText,'const passTypeOverride = opts.passType;', `if (Settings
                     const d = Math.hypot(aim.x-from.x, aim.y-from.y);
                     if (d < 2.0 || d > field.width*.43) continue;
                     const speed = estimatePassGroundSpeed(from, aim, passer, 'short');
-                    if (!isPassSafeFromAllOpponents(from, aim, mate, opponents, speed)) continue;
+                    if (!passSafeFromAllOpponents(from, aim, mate, opponents, speed)) continue;
                     const gain = (aim.x-from.x)*sign;
                     const depth = 1-Math.abs(aim.x-oppGoalX)/field.width;
                     const central = 1-Math.abs(aim.y-field.centerY)/(field.height*.5);
