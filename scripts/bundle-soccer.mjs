@@ -37,6 +37,16 @@ const outfieldFile='kernel/core/entities/player_states_outfield.js';
 let outfield=git('show','HEAD:'+outfieldFile);
 outfield=patch(outfield,'target.passLinkCooldown = 1.4 + Math.random() * 0.6;', 'target.passLinkCooldown = Settings.SUNDAY_EXPRESS ? 0.35 + Math.random() * 0.2 : 1.4 + Math.random() * 0.6;');
 writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
+// Shape mode still uses upstream player FSMs and physics. Restrict chasing to
+// a single stable assignment per side; retain intentional pass receivers.
+const simFile='kernel/providers/simulator/simulator.js';
+let simText=readFileSync(resolve(upstream,simFile),'utf8');
+simText=patch(simText,'const chasers = this.getActiveChasers();','const chasers = this.getActiveChasers();');
+simText=patch(simText,"        for (const p of this.players) {\n            if (p.isSentOff) continue;\n            // Manual avatar: state + movement owned by manual_control / human gates","        if (Settings.SUNDAY_SHAPE && this.shapeChasers) {\n            chasers.clear();\n            for (const p of this.shapeChasers()) chasers.add(p);\n        }\n        for (const p of this.players) {\n            if (p.isSentOff) continue;\n            // Manual avatar: state + movement owned by manual_control / human gates");
+writeFileSync(resolve(upstream,simFile),simText);
+outfield=patch(outfield,'const target = p.supportTarget || p.getIdleMoveTarget();','const target = Settings.SUNDAY_SHAPE ? p.getIdleMoveTarget() : (p.supportTarget || p.getIdleMoveTarget());');
+outfield=patch(outfield,'if (!ball || p.receiveTimer <= 0) {','if (!ball || p.receiveTimer <= 0 || (Settings.SUNDAY_SHAPE && ball.owner && ball.owner !== p)) {');
+writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
 const license=readFileSync(resolve(upstream,'LICENSE'),'utf8');
