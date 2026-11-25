@@ -51,7 +51,31 @@ teamText=patch(teamText,'let score = scorePassTarget(passer, teammate, aimDist, 
             }`);
 teamText=patch(teamText,'const aimDetail = getBestPassToReceiver(from, teammate, passer, opponents, {', 'const aimDetail = getBestPassToReceiver(from, teammate, passer, opponents, { preferFeet: !!Settings.SUNDAY_ATTACK,');
 teamText=patch(teamText,'if (score < 5) continue;', 'if (score < (Settings.SUNDAY_ATTACK ? 1 : 5)) continue;');
-teamText=patch(teamText,'if (passType === \'short\' && score > bestShortScore)', 'if (passType === \'short\' && score > bestShortScore)');
+teamText=patch(teamText,'const passTypeOverride = opts.passType;', `if (Settings.SUNDAY_ATTACK && !opts.passType && passer.role !== 'GK') {
+            // Five-a-side: evaluate compact, grounded combinations before the
+            // full-pitch aerial-pass model. All lanes must be intercept-safe.
+            const field = Utils.getFieldBounds();
+            const sign = oppGoalX > field.centerX ? 1 : -1;
+            let best = null, bestValue = -Infinity;
+            for (const mate of teammates) {
+                if (mate === passer.lastPassFrom && passer.passLinkCooldown > 0) continue;
+                const target = getPassReceiverPosition(mate, passer, passer.level);
+                for (const aim of [{x:mate.x,y:mate.y},target]) {
+                    const d = Math.hypot(aim.x-from.x, aim.y-from.y);
+                    if (d < 2.0 || d > field.width*.43) continue;
+                    const speed = estimatePassGroundSpeed(from, aim, passer, 'short');
+                    if (!isPassSafeFromAllOpponents(from, aim, mate, opponents, speed)) continue;
+                    const gain = (aim.x-from.x)*sign;
+                    const depth = 1-Math.abs(aim.x-oppGoalX)/field.width;
+                    const central = 1-Math.abs(aim.y-field.centerY)/(field.height*.5);
+                    const clearance = Math.min(...opponents.filter(o=>!o.isSentOff).map(o=>Math.hypot(o.x-aim.x,o.y-aim.y)));
+                    const value = gain*.8 + Math.min(6,clearance)*.9 + (depth>.60?central*4:0) - d*.16;
+                    if (value>bestValue) {bestValue=value;best={teammate:mate,type:'short',aim,progressive:gain,lineBreak:false};}
+                }
+            }
+            if (best && bestValue>0) return best;
+        }
+        const passTypeOverride = opts.passType;`);
 writeFileSync(resolve(upstream,teamFile),teamText);
 const outfieldFile='kernel/core/entities/player_states_outfield.js';
 let outfield=git('show','HEAD:'+outfieldFile);
@@ -76,7 +100,7 @@ outfield=patch(outfield,'if (distToGoal < getShootRange(p)', `if (Settings.SUNDA
                         const t = option.teammate;
                         const gain = distToGoal - Math.abs(t.x - targetGoalX);
                         const central = Math.abs(t.y - field.centerY) < field.height * .27;
-                        if (central && gain > field.width * .055 && Math.abs(t.x - targetGoalX) < field.width * .33) {
+                        if (central && gain > field.width * .025 && Math.abs(t.x - targetGoalX) < field.width * .33) {
                             p.passTarget = t; p.passType = option.type; p.passAim = option.aim || null;
                             p.fsm.changeState(PlayerStates.Pass); return;
                         }
@@ -84,8 +108,14 @@ outfield=patch(outfield,'if (distToGoal < getShootRange(p)', `if (Settings.SUNDA
                 }
                 if (distToGoal < getShootRange(p)`);
 outfield=patch(outfield,'const tryShoot = willingness >= 1 || Math.random() < willingness;', 'const tryShoot = (Settings.SUNDAY_ATTACK && p.passLinkCooldown > 0 && p.lastPassFrom && distToGoal < field.width * .30) || willingness >= 1 || Math.random() < willingness;');
-outfield=patch(outfield,'const passChance = computeDribblePassChance(p, threat);','const passChance = Settings.SUNDAY_ATTACK ? Math.max(computeDribblePassChance(p, threat), threat.threatened ? .58 : .24) : computeDribblePassChance(p, threat);');
+outfield=patch(outfield,'const passChance = computeDribblePassChance(p, threat);','const passChance = Settings.SUNDAY_ATTACK ? Math.max(computeDribblePassChance(p, threat), threat.threatened ? .68 : .18) : computeDribblePassChance(p, threat);');
 writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
+// The pass predictor and actual kick share this function. Crisp ground
+// passes on the compact pitch must use the same speed in both places.
+const safetyFile='kernel/core/lib/pass_safety.js';
+let safety=git('show','HEAD:'+safetyFile);
+safety=patch(safety,'return v0;', "return Settings.SUNDAY_ATTACK && !isLong ? Math.min(22, v0 * 1.22) : v0;");
+writeFileSync(resolve(upstream,safetyFile),safety+'\n');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
 const license=readFileSync(resolve(upstream,'LICENSE'),'utf8');
