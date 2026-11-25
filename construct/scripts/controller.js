@@ -39,6 +39,7 @@ export class Sunday{
  }
  advanceAuto(dt){
   const s=this.auto;if(!s||s.phase!=='match'||s.paused)return;
+  const previousPhase=s.match.phase,previousCall=s.match.call;
   s.acc+=Math.max(0,dt)*s.speed*BASE_PLAYBACK;
   while(s.acc>=SOCCER_STEP&&!s.match.finished){s.match.step();s.acc-=SOCCER_STEP;
    if(s.match.phase==='halftime'&&!s.halfSeen){s.halfSeen=true;s.phase='halftime';s.acc=0;break;}
@@ -46,7 +47,7 @@ export class Sunday{
   this.drawAuto();s.hud+=dt;
   if(s.phase==='halftime'){this.refresh();return;}
   if(s.match.finished){s.results.push([...s.match.score]);s.phase='result';this.refresh();}
-  else if(s.hud>=.2){s.hud=0;this.refresh();}
+  else if(s.hud>=.2||previousPhase!==s.match.phase||previousCall!==s.match.call){s.hud=0;this.refresh();}
  }
  resumeHalf(id){
   const s=this.auto;if(!s||s.phase!=='halftime'||!s.match.chooseHalfPlan(id))return;
