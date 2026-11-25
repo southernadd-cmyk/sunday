@@ -126,6 +126,9 @@ export function validLoadout(ids){return Array.isArray(ids)&&ids.length===3&&new
 export function createEnvironment({sim,field,dt,event,resetPlayer,loadout=DEFAULT_ENVIRONMENT}){
  if(!validLoadout(loadout))throw Error('Choose exactly three distinct environmental effects');
  const equipped=[...loadout],legacy=createMutations({sim,field,dt,event,resetPlayer});
+ // The native player update is skipped only during a storm stun. This prevents
+ // stunned players from kicking or tackling before their position is restored.
+ for(const p of sim.players)if(typeof p.update==='function'){const update=p.update;p.update=function(...args){if(!this.sundayStunned)return update.apply(this,args);};}
  const active=new Map(),ready=new Map(),used=new Set(),stunned=new Map(),motion=new Map();
  const metrics={activations:0,reuses:0,strikes:0,stuns:0,iceSteps:0,mudSteps:0,hillRolls:0,windRolls:0,wallHits:0,synergies:{}};
  let tick=0,previousPlayers=new Map();
@@ -177,16 +180,17 @@ export function createEnvironment({sim,field,dt,event,resetPlayer,loadout=DEFAUL
   if(ice&&!mud){const v=motion.get(p)||{x:dx,y:dy};mx=.62*dx+.38*v.x;my=.62*dy+.38*v.y;metrics.iceSteps++;}
   if(mud){mx*=.53;my*=.53;metrics.mudSteps++;if(ice)count('snow','mud');}
   if(hill&&dist(p,hill)<hill.r&&dist(p,hill)<dist(old,hill)){mx*=.76;my*=.76;}
-  p.x=clamp(old.x+mx,.2,field.width-.2);p.y=clamp(old.y+my,.2,field.height-.2);
+  if(mx!==dx||my!==dy){p.x=clamp(old.x+mx,.2,field.width-.2);p.y=clamp(old.y+my,.2,field.height-.2);}
   motion.set(p,{x:mx,y:my});
   const w=active.get('wall');
   if(w&&Math.abs(p.y-w.y)<w.r+.35&&(Math.abs(p.x-w.x)<.65||(old.x-w.x)*(p.x-w.x)<0)){p.x=w.x+(old.x<=w.x?-.66:.66);zero(p);motion.delete(p);}
  }
  function after(prev){
   if(!isPlay())return;
+  if(!active.size&&!stunned.size)return;
   const cloud=active.get('lightning');if(cloud&&tick>=cloud.nextStrike){strike(cloud);cloud.nextStrike=tick+ticks(2.4);}
   for(const p of sim.players)if(!p.isSentOff&&p.role!=='GK')constrainPlayer(p,previousPlayers.get(p));
-  const b=sim.ball;if(b.owner&&!b.owner.isSentOff){b.x=b.owner.x;b.y=b.owner.y;}
+  const b=sim.ball;if(b.owner?.sundayStunned){b.owner=null;b.vx=b.vy=b.vz=0;b.z=0;b.isShot=false;}
   if(!b.owner&&b.z<.65&&!legacy.snapshot(p=>p).ballHidden){
    const ice=inZone('snow',b),mud=inZone('mud',b),h=active.get('hill'),wind=active.get('wind'),w=active.get('wall');
    if(ice&&!mud){b.vx*=1.012;b.vy*=1.012;}
