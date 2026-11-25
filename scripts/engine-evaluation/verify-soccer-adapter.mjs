@@ -8,7 +8,7 @@ async function run(seed,traits){
  let steps=0;
  while(!m.finished&&steps<12000){m.step();steps++;if(steps%20===0){assert.ok(m.actors.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.z)));assert.ok(Number.isFinite(m.ball.x)&&Number.isFinite(m.ball.z)&&Number.isFinite(m.ball.y));}}
  assert.ok(m.finished,'Match must reach full time');
- assert.equal(m.score.length,2);assert.ok(m.stats.every(s=>s.completed<=s.passes+5));
+ assert.equal(m.score.length,2);assert.ok(m.stats.every(s=>s.completed<=s.passes));
  return {seed,traits,steps,wallMs:Math.round(performance.now()-start),score:m.score,stats:m.stats};
 }
 for(const seed of [1,2,3,4,5,6])rows.push(await run(seed,['touch','overlap']));

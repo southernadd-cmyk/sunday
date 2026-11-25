@@ -41,7 +41,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75){
  sim.defaultStats=statsPreset.default_stats;sim.teamStatsPreset=statsPreset.teams;sim.formationsPreset=formations;
  await sim.start();sim.active=true;
  const field=Utils.getFieldBounds(),events=[],stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackles:0,interceptions:0,saves:0,blocks:0,possession:0,bestChain:0,progressive:0}));
- const states=new Map();let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1;
+ let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
  const state={duration,time:0,finished:false,actors:[],ball:{x:0,z:0,y:0},score:[0,0],stats,events,step,upstream:'soccer-js',stepSeconds:SOCCER_STEP};
  function event(text,team,kind='play'){events.unshift({time:state.time,text,side:team==='A'||team==='B'?side(team):-1,kind});if(events.length>8)events.pop();}
  sim._telemetry={
@@ -63,12 +63,13 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75){
   Settings.AI.A=home;Settings.AI.B=away;Time.deltaTime=SOCCER_STEP;
   const before=sim.ball.owner,beforeShot=sim.ball.isShot;sim.updateAll();frames++;snapshot();
   const after=sim.ball.owner;
-  for(const p of sim.players){
-   const name=p.fsm.getNameOfCurrentState();
-   if(name==='Pass'&&states.get(p)!=='Pass')stats[side(p.team)].passes++;
-   states.set(p,name);
-  }
-  if(sim.ball.passFromX!=null&&sim.ball.lastKicker)pending={kicker:sim.ball.lastKicker,team:sim.ball.lastKicker.team};
+  // Count a single actual pass launch, not a transient AI state. A pending
+  // flight may span many ticks and an attempted pass can be aborted before contact.
+  const kicker=sim.ball.lastKicker;
+  if(sim.ball.passFromX!=null&&kicker&&!after){
+   const key=String(sim.players.indexOf(kicker))+':'+sim.ball.passFromX+':'+sim.ball.passFromY;
+   if(key!==lastLaunch){lastLaunch=key;pending={kicker,team:kicker.team};stats[side(kicker.team)].passes++;}
+  }else if(after||sim.ball.passFromX==null){lastLaunch=null;}
   if(after&&pending){
    if(after!==pending.kicker&&after.team===pending.team){const a=stats[side(after.team)];a.completed++;if(chainSide!==side(after.team)){chain=0;chainSide=side(after.team);}chain++;a.bestChain=Math.max(a.bestChain,chain);}
    else if(after.team!==pending.team){stats[side(after.team)].interceptions++;event('INTERCEPTION',after.team,'tackle');chain=0;chainSide=-1;}
@@ -78,7 +79,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75){
   if(after){stats[side(after.team)].possession+=SOCCER_STEP;if(beforeShot&&after.role==='GK'&&after!==before){stats[side(after.team)].saves++;event('KEEPER SAVES',after.team,'save');}}
   if(state.score[0]!==lastScore[0]||state.score[1]!==lastScore[1]){const team=state.score[0]>lastScore[0]?'A':'B';event('GOAL! '+state.score.join('–'),team,'goal');lastScore=[...state.score];chain=0;chainSide=-1;}
   const phase=sim.matchState;
-  if(phase!==lastState){if(['corner','goalkick','throwin','freekick','offside','penalty','halftime','fulltime','kickoff'].includes(phase)){event(phase.toUpperCase(),sim.setPieceKickingTeam,'match');pending=null;chain=0;chainSide=-1;}lastState=phase;}
+  if(phase!==lastState){if(['corner','goalkick','throwin','freekick','offside','penalty','halftime','fulltime','kickoff'].includes(phase)){event(phase.toUpperCase(),sim.setPieceKickingTeam,'match');pending=null;lastLaunch=null;chain=0;chainSide=-1;}lastState=phase;}
  }
  snapshot();event('KICK OFF',null,'match');return state;
 }
