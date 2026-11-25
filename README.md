@@ -6,7 +6,7 @@ Five-a-side football in a fictional British leisure centre. The football is auto
 
 ## How to play
 
-Start Game launches a five-a-side match in Construct. Drag one of the six mutation tokens directly onto a red player or the pitch. Play freezes during the drag and resumes on release. Invalid drops cancel without spending the token; Squeeze is also deployed by dragging onto the pitch. Each power can be used once per match and lasts ten simulation seconds at normal speed. Effects overlap. Tap the clock or press Space to pause; hold the clock or press Escape to return to the title. Tap anywhere to start, resume at half-time, or play again after full-time.
+Start Game launches a five-a-side match in Construct. Drag one of the six mutation tokens directly onto a red player or the pitch. Play freezes during the drag and resumes on release. Invalid drops cancel without spending the token; Squeeze is also deployed by dragging onto the pitch. Each power can be used once per match and lasts ten simulation seconds (about 6.7 real seconds at the 1.5× arcade pace). Effects overlap. Tap the clock or press Space to pause; hold the clock or press Escape to return to the title. Tap anywhere to start, resume at half-time, or play again after full-time.
 
 This is a playable mutation prototype; drafting and long-term run progression are not yet implemented. The Match Lab preserves fixed and adaptive football evaluation controls.
 

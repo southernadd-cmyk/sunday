@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,existsSync} from 'node:fs';
-import {Sunday,heading,advanceStride,interpolatePose} from '../construct/scripts/controller.js';
+import {Sunday,heading,advanceStride,interpolatePose,ARCADE_RATE,playerSpriteSize,cameraGoal} from '../construct/scripts/controller.js';
 
 const json=p=>JSON.parse(readFileSync(new URL('../construct/'+p,import.meta.url)));
 
@@ -122,7 +122,32 @@ test('native directional atlas contains all 192 distinct frame records with vali
 test('fractional visual movement leaves the authoritative simulation untouched',async()=>{
  const g=new Sunday(runtime());await start(g);openPlay(g);
  const s=g.auto,m=s.match,initial=m.time;
- s.acc=0;g.advanceAuto(.05);const authoritative=m.actors.map(a=>({...a}));const prev=g.visualActors.map(a=>({...a}));
+ s.speed=1;s.acc=0;g.advanceAuto(.05);const authoritative=m.actors.map(a=>({...a}));const prev=g.visualActors.map(a=>({...a}));
  g.advanceAuto(.025);assert.ok(Math.abs(m.time-initial-.05)<1e-6);assert.deepEqual(m.actors,authoritative);
  const next=g.visualActors;for(let i=0;i<next.length;i++){assert.ok(Math.abs(next[i].x-(prev[i].x+authoritative[i].x)/2)<1e-6);assert.ok(Math.abs(next[i].z-(prev[i].z+authoritative[i].z)/2)<1e-6);}
+});
+
+test('arcade playback advances 50 percent more fixed steps without changing physics step size',async()=>{
+ const g=new Sunday(runtime());await start(g);openPlay(g);const s=g.auto,m=s.match;
+ assert.equal(s.speed,ARCADE_RATE);assert.equal(ARCADE_RATE,1.5);assert.equal(m.stepSeconds,.05);
+ const original=m.step;let ticks=0;m.step=()=>{ticks++;original();};
+ s.acc=0;for(let i=0;i<60;i++)g.advanceAuto(1/60);
+ assert.ok(ticks===30||ticks===29,'expected approximately 30 fixed steps, got '+ticks);
+ const before=ticks;g.auto.paused=true;g.advanceAuto(.5);assert.equal(ticks,before);g.auto.paused=false;
+});
+test('compact sprite sizing preserves giant multiplier and mobile minimum',()=>{
+ for(const [scale,u] of [[10,1],[4,1],[960/88,1/.375],[8,1/.65]]){
+  const size=playerSpriteSize(scale,u);assert.ok(size>=8.5*u);
+  assert.ok(size<=Math.max(2.9*scale,10*u)*.86);
+  assert.equal(playerSpriteSize(scale,u,3),size*3);
+ }
+});
+test('camera predicts moving ball without overshooting pitch limits',()=>{
+ const scale=8,h=320;
+ assert.equal(cameraGoal({z:0},{z:0},scale,h),0);
+ assert.ok(cameraGoal({z:6},{z:5},scale,h)>6);
+ assert.ok(cameraGoal({z:-6},{z:-5},scale,h)<-6);
+ assert.equal(cameraGoal({z:47},{z:40},scale,h),35);
+ assert.equal(cameraGoal({z:-47},{z:-40},scale,h),-35);
+ assert.equal(cameraGoal({z:40},{z:39},scale,1000),0);
 });

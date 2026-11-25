@@ -5,6 +5,14 @@ const C={navy:[.055,.085,.105,1],panel:[.10,.15,.16,1],cream:[.94,.91,.77,1],mut
 const rgb=c=>c.slice(0,3),clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const randomSeed=()=>crypto.getRandomValues(new Uint32Array(1))[0];
 const mix=(a,b,t)=>a+(b-a)*t;
+export const ARCADE_RATE=1.5;
+export function playerSpriteSize(scale,u,multiplier=1){return Math.max(2.15*scale,8.5*u)*multiplier;}
+// Follow the ball with short velocity look-ahead, while keeping it in the visible central band.
+export function cameraGoal(ball,previous,scale,playHeight){
+ const half=playHeight/(2*scale),limit=Math.max(0,55-half);
+ const lead=previous?clamp((ball.z-previous.z)*3,-half*.24,half*.24):0;
+ return clamp(ball.z+lead,-limit,limit);
+}
 export const heading=(dx,dz,fallback=0)=>Math.hypot(dx,dz)<.025?fallback:(Math.round(Math.atan2(dx,-dz)/(Math.PI/4))+8)%8;
 export function interpolatePose(previous,current,t,limit=10){
  if(!previous||previous.visible!==current.visible||Math.hypot(current.x-previous.x,current.z-previous.z)>limit)return {...current};
@@ -13,7 +21,7 @@ export function interpolatePose(previous,current,t,limit=10){
 export function advanceStride(previous,actor,old,reset=false){
  const dx=old?actor.x-old.x:0,dz=old?actor.z-old.z:0,d=Math.hypot(dx,dz),moving=!reset&&d>=.025&&d<10;
  const dir=moving?heading(dx,dz,previous?.dir):previous?.dir??(actor.side===0?0:4);
- const stride=moving?((previous?.stride||0)+d/1.6)%4:previous?.stride||0;
+ const stride=moving?((previous?.stride||0)+d/1.15)%4:previous?.stride||0;
  return {dir,stride,frame:dir*6+(actor.sliding?5:moving?1+Math.floor(stride):0)};
 }
 const POWERS=[
@@ -46,7 +54,7 @@ export class Sunday{
   runtime.addEventListener('keydown',e=>this.key(e));runtime.addEventListener('resume',()=>{this.cancelDrag();if(this.auto)this.auto.last=performance.now();});
  }
  async startAuto(seed=randomSeed()){
-  const s=this.auto={seed,phase:'loading',match:null,speed:1,paused:false,armed:null,halfSeen:false,acc:0,hud:0,last:performance.now(),message:''};this.camera=0;this.refresh();
+  const s=this.auto={seed,phase:'loading',match:null,speed:ARCADE_RATE,paused:false,armed:null,halfSeen:false,acc:0,hud:0,last:performance.now(),message:''};this.camera=0;this.refresh();
   try{
    const m=await createSoccerMatch(seed,[],0,90,5,'intent',['diamond','diamond'],{mutations:true,adaptiveOpponent:true});
    if(this.auto!==s)return;s.match=m;s.phase='match';s.last=performance.now();this.captureMotion(true);this.drawAuto(1);this.refresh();
@@ -93,21 +101,21 @@ export class Sunday{
    return {...interpolatePose(oldById.get(a.id),now,alpha),size:a.size,visible:a.visible,turbo:a.turbo,cannon:a.cannon};
   });
   this.visualBall=current.hidden!==previous.hidden?{...m.ball}:interpolatePose(previous.ball,current.ball,alpha,18);
-  const q=this.layout.play,limit=Math.max(0,55-q.h/(2*this.scale)),target=clamp(this.visualBall.z,-limit,limit);
-  if(!s.armed&&!s.paused)this.camera=clamp(this.camera+(target-this.camera)*(1-Math.exp(-Math.max(0,dt)*10)),-limit,limit);
+  const q=this.layout.play,limit=Math.max(0,55-q.h/(2*this.scale)),target=cameraGoal(current.ball,previous.ball,this.scale,q.h);
+  if(!s.armed&&!s.paused)this.camera=clamp(this.camera+(target-this.camera)*(1-Math.exp(-Math.max(0,dt)*15)),-limit,limit);
   else this.camera=clamp(this.camera,-limit,limit);
   const origin=this.point({x:-44,z:-55});
   Object.assign(this.pitch,{x:origin.x,y:origin.y,width:88*this.scale,height:110*this.scale,angle:0,isVisible:true});
   for(const a of this.visualActors){
    let sprite=this.actors[a.id];if(!sprite){sprite=this.runtime.objects.Footballer.createInstance('Pitch',0,0);this.actors[a.id]=sprite;}
-   const p=this.point(a),size=Math.max(2.9*this.scale,10*this.u)*(a.size||1),animation=['Home','Away','Keeper','Official'][a.team]||'Home';
+   const p=this.point(a),size=playerSpriteSize(this.scale,this.u,a.size||1),animation=['Home','Away','Keeper','Official'][a.team]||'Home';
    sprite.x=p.x;sprite.y=p.y;sprite.width=sprite.height=size;sprite.isVisible=a.visible!==false;
    if(sprite.animationName!==animation)sprite.setAnimation(animation);
    sprite.animationFrame=stride.get(a.id)?.frame||0;
   }
   for(let i=m.actors.length;i<this.actors.length;i++)this.actors[i].isVisible=false;
   for(const a of this.actors.filter(a=>a.isVisible).sort((a,b)=>a.y-b.y))a.moveToTop();
-  const p=this.point(this.visualBall);this.ball.x=p.x;this.ball.y=p.y-this.visualBall.y*this.scale*.65;this.ball.width=this.ball.height=Math.max(3*this.u,.65*this.scale);this.ball.isVisible=!m.mutations.ballHidden;this.ball.moveToTop();
+  const p=this.point(this.visualBall);this.ball.x=p.x;this.ball.y=p.y-this.visualBall.y*this.scale*.65;this.ball.width=this.ball.height=Math.max(3*this.u,.55*this.scale);this.ball.isVisible=!m.mutations.ballHidden;this.ball.moveToTop();
   this.drawPitchEffects();
  }
  pitchRect(x,y,w,h,c){const q=this.layout.play,L=this.v.left,T=this.v.top;const x1=Math.max(q.x,x),y1=Math.max(q.y,y),x2=Math.min(q.x+q.w,x+w),y2=Math.min(q.y+q.h,y+h);if(x2>x1&&y2>y1)this.plans.fillRect(x1-L,y1-T,x2-L,y2-T,c);}
@@ -131,7 +139,7 @@ export class Sunday{
     for(const a of (this.visualActors||m.actors).filter(p=>p.side===0&&p.role!=='GK'&&p.visible)){
      const p=this.point(a);if(p.y>this.layout.play.y&&p.y<this.layout.play.y+this.layout.play.h){
       const chosen=drop?.value===a.id;
-      this.plans.outlineEllipse(p.x-this.v.left,p.y-this.v.top,Math.max(12*this.u,4*scale*(a.size||1)),Math.max(8*this.u,2*scale*(a.size||1)),chosen?power.color:[.76,.82,.63,.8],(chosen?3:1)*this.u,false);
+      this.plans.outlineEllipse(p.x-this.v.left,p.y-this.v.top,Math.max(12*this.u,3*scale*(a.size||1)),Math.max(8*this.u,1.6*scale*(a.size||1)),chosen?power.color:[.76,.82,.63,.8],(chosen?3:1)*this.u,false);
      }
     }
    }else if(drop&&power.id==='squeeze'){
@@ -168,7 +176,7 @@ export class Sunday{
   this.label('FIVE-A-SIDE  /  ANYTHING GOES',x,y+62*u*k,w,25*u*k,13*k,C.cream,'center');
   if(this.auto?.phase==='loading'){this.label('KICK OFF IN A MOMENT',x,y+120*u*k,w,30*u*k,16*k,C.gold,'center');return;}
   if(this.auto?.phase==='error'){this.label(this.auto.message,x,y+110*u*k,w,30*u*k,13*k,C.red,'center');this.label('TAP TO RETURN',x,y+160*u*k,w,30*u*k,14*k,C.gold,'center');return;}
-  this.label('Football plays itself.\nDrag a power onto a red player or the pitch.\nRelease to unleash it. Stack powers for 10 seconds.\nTap the clock to pause; hold it to quit.',x,y+95*u*k,w,96*u*k,Math.min(13,W/u/28)*k,C.cream,'center');
+  this.label('Football plays itself.\nDrag a power onto a red player or the pitch.\nRelease to unleash it. Stack powers for a burst of play.\nTap the clock to pause; hold it to quit.',x,y+95*u*k,w,96*u*k,Math.min(13,W/u/28)*k,C.cream,'center');
   this.label('TAP ANYWHERE TO KICK OFF',x,y+199*u*k,w,30*u*k,16*k,C.gold,'center');
   this.label('THE LEISURE CENTRE CUP',x,y+238*u*k,w,20*u*k,11*k,C.muted,'center');
  }
@@ -200,7 +208,7 @@ export class Sunday{
    this.tokenDisc(cx,cy,r-2*u,selected?[.20,.23,.18,1]:[.08,.12,.13,1]);
    if(!selected)this.icon(p,cx-r*.59,cy-r*.59,r*1.18,color);
    if(active)this.rect(cx-r,y+2*r+1*u,2*r*clamp(active.seconds/10,0,1),2*u,p.color);
-   this.label(active?active.seconds.toFixed(1)+'s':spent?'USED':p.name,L+i*cw,y+2*r+3*u,cw,13*u,Math.max(8,Math.min(11,cw/u/7)),color,'center');
+   this.label(active?(active.seconds/s.speed).toFixed(1)+'s':spent?'USED':p.name,L+i*cw,y+2*r+3*u,cw,13*u,Math.max(8,Math.min(11,cw/u/7)),color,'center');
    this.tokens.push({id:p.id,x:L+i*cw,y:hudY+16*u,w:cw,h:l.cardH,enabled});
   });
   if(armed&&this.drag?.kind==='power'){
@@ -225,7 +233,7 @@ export class Sunday{
     const top=q.y-h*.8,bottom=q.y+4*this.u,dx=Math.max(0,Math.abs(q.x-x)-h*.25),dy=Math.max(0,top-y,y-bottom);
     return {a,d:Math.hypot(dx,dy),rank:Math.hypot(q.x-x,q.y-h*.35-y)};
    }).sort((a,b)=>a.d-b.d||a.rank-b.rank);
-   const nearest=candidates[0];if(!nearest||nearest.d>Math.max(12*this.u,2*this.scale))return null;
+   const nearest=candidates[0];if(!nearest||nearest.d>Math.max(15*this.u,2*this.scale))return null;
    return {value:nearest.a.id};
   }
   if(Math.abs(p.x)>34||Math.abs(p.z)>47)return null;
