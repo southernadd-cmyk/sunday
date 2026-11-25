@@ -2,7 +2,9 @@
 // This file is copied to the upstream checkout and bundled as a browser ESM.
 // No upstream rendering, audio, network fetches, or DOM controls are needed.
 import {systemAssignment,resolveSystem,systemCanPress,freeKickLayout,planDirectFreeKick} from './five-tactics.js';
+import {createMutations,MUTATIONS} from './mutations.js';
 import {possessionIntent,possessionAction} from './possession-intent.js';
+const {PlayerStates}=require('./kernel/core/entities/player.js');
 const {Simulator,MatchStates}=require('./kernel/providers/simulator/simulator.js');
 const {Settings}=require('./kernel/settings.js');
 const {predict3D}=require('./kernel/core/lib/ball_prediction.js');
@@ -84,7 +86,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  await sim.start();sim.active=true;
  const field=Utils.getFieldBounds(),events=[],stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackleAttempts:0,tackles:0,slideStarts:0,slideAttempts:0,slideWins:0,firstTouches:0,cleanTouches:0,passTouches:0,cleanPassTouches:0,touchControlSum:0,interceptions:0,saves:0,blocks:0,possession:0,bestChain:0,progressive:0}));
  let lastCompleted=null,lastThirdSide=null;
- let directFlight=null,layoff=null,wallContact=false;
+ let directFlight=null,layoff=null,wallContact=false,mutations=null;
  let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
  const originals=new Map();
  const flow={freeKicks:{awarded:0,planned:0,eligible:0,probed:0,driven:0,curled:0,dipped:0,layoffs:0,layoffShots:0,returnAttempts:0,returnCompleted:0,returnShots:0,combinationGoals:0,shotGoals:0,shotSaves:0,shotWallBlocks:0,shotDeflections:0,shotMisses:0,shotUnresolved:0,shots:0,passes:0,releasedShots:0,releasedPasses:0,completedPasses:0,interceptedPasses:0,indirect:0,wallPlayers:0,clearanceViolations:0,byTeam:[0,0]},intentDecisions:0,intentCounts:{},intentActions:{},teamAssignments:[{},{}],teamIntentActions:[{},{}],assignmentTicks:0,assignmentCounts:{},kickoffTicks:0,kickoffCrowdedTicks:0,finalThirdEntries:0,createdShots:0,crowdedTicks:0,shapeTicks:0,spreadSum:0,ownedTicks:0,threePassChains:0,returnPasses:0,shotZones:[0,0,0],playTicks:0,deadTicks:0,boardBounces:0,turnovers:0,shots:0,goals:0,longestQuiet:0,quiet:0,phases:{}};
@@ -367,25 +369,33 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   onTackleAttempt({tackler,success,tackleType}){if(!tackler)return;const a=stats[side(tackler.team)];a.tackleAttempts++;if(tackleType==='slide'){a.slideAttempts++;if(success)a.slideWins++;}if(success){a.tackles++;if(tackler.team==='A')gainCharge();event(tackleType==='slide'?'SLIDING TACKLE WON':'BALL WON',tackler.team,'tackle');}},
    onSlideStarted({player}){stats[side(player.team)].slideStarts++;event('SLIDING TACKLE',player.team,'tackle');},
    onFirstTouch({player,fumbled,control,receivedPass}){const a=stats[side(player.team)];a.firstTouches++;a.touchControlSum+=control;if(!fumbled)a.cleanTouches++;if(receivedPass){a.passTouches++;if(!fumbled)a.cleanPassTouches++;}if(fumbled)event('HEAVY TOUCH',player.team,'play');},
-  onShotKicked({team}){flow.shots++;const comboShooter=sim.ball.owner;if(comboShooter?.sundayCombinationShot){const kind=comboShooter.sundayCombinationShot;flow.freeKicks[kind==='return'?'returnShots':'layoffShots']++;directFlight={team,frame:frames+1,combination:true};comboShooter.sundayCombinationShot=null;}if(lastCompleted&&lastCompleted.to.team===team&&frames-lastCompleted.frame<80)flow.createdShots++;const p=sim.ball.owner||sim.ball.lastKicker;if(p){const right=sim.isSecondHalf()?team==='B':team==='A',dist=Math.abs(p.x-(right?field.width:0))/field.width;flow.shotZones[Math.min(2,Math.floor(dist*3))]++;}stats[side(team)].shots++;event('SHOT!',team,'shot');rocketKick=team==='A'&&state.chips.some(c=>c.id==='rocket'&&c.status==='active');},
+  onShotKicked({team}){mutations?.shot(sim.ball.owner||sim.ball.lastKicker);flow.shots++;const comboShooter=sim.ball.owner;if(comboShooter?.sundayCombinationShot){const kind=comboShooter.sundayCombinationShot;flow.freeKicks[kind==='return'?'returnShots':'layoffShots']++;directFlight={team,frame:frames+1,combination:true};comboShooter.sundayCombinationShot=null;}if(lastCompleted&&lastCompleted.to.team===team&&frames-lastCompleted.frame<80)flow.createdShots++;const p=sim.ball.owner||sim.ball.lastKicker;if(p){const right=sim.isSecondHalf()?team==='B':team==='A',dist=Math.abs(p.x-(right?field.width:0))/field.width;flow.shotZones[Math.min(2,Math.floor(dist*3))]++;}stats[side(team)].shots++;event('SHOT!',team,'shot');rocketKick=team==='A'&&state.chips.some(c=>c.id==='rocket'&&c.status==='active');},
   onProgressivePass({team}){stats[side(team)].progressive++;},
   onBlock(info){if(info?.team==='A'||info?.team==='B')stats[side(info.team)].blocks++;event('SHOT BLOCKED',info?.team,'save');}
  };
+ if(intent&&options.mutations===true){
+  mutations=createMutations({sim,field,dt:SOCCER_STEP,event,resetPlayer:p=>{p.fsm.changeState(PlayerStates.Idle);p._currentSpeed=0;p.receiveTarget=null;p.passTarget=null;p.shotAim=null;}});
+  state.activateMutation=(id,target)=>{const point=target&&typeof target==='object'?{x:(.5-target.z/94)*field.width,y:(target.x/68+.5)*field.height}:target;const ok=mutations.activate(id,point);snapshot();return ok;};
+  state.mutationDefinitions=MUTATIONS;
+  if(options.testHooks)state.mutationTest={controller:mutations,sim,field};
+ }
  function point(p){return {x:(p.y/field.height-.5)*68,z:(.5-p.x/field.width)*94};}
  function snapshot(){
-  state.actors=sim.players.map((p,i)=>({id:i,...point(p),team:p.role==='GK'?2:side(p.team),side:side(p.team),role:p.role,assignment:zones?p.sundayAssignment||null:null,visible:!p.isSentOff,sliding:!!p.isSliding,frame:Math.floor(frames/3)%2}));
+  state.actors=sim.players.map((p,i)=>({id:i,...point(p),team:p.role==='GK'?2:side(p.team),side:side(p.team),role:p.role,assignment:zones?p.sundayAssignment||null:null,visible:!p.isSentOff,size:p.sundayMutationSize||1,turbo:p.sundayMutationSpeed>1,cannon:p.sundayMutationShot>1,sliding:!!p.isSliding,frame:Math.floor(frames/3)%2}));
   state.ball={...point(sim.ball),y:Math.max(0,sim.ball.z||0)+.4};
   state.score=[sim.scoreA,sim.scoreB];state.time=clamp(sim.matchTimer/5400*duration,0,duration);
+  if(mutations)state.mutations=mutations.snapshot(point);
   state.matchSeconds=clamp(sim.matchTimer,0,5400);state.half=sim.isSecondHalf()?2:1;state.phase=sim.matchState;state.finished=state.phase==='fulltime';
  }
  function step(){
   if(state.finished)return;
+  if(mutations&&!mutations.before()){snapshot();return;}
   if(arcade&&sim.ball){sim.ball.offsideReceiver=null;sim.ball.offsideLineX=null;}
   // Reapply team-local knobs before the tick; upstream owns every decision.
   Settings.AI.A=home;Settings.AI.B=away;Time.deltaTime=SOCCER_STEP;
   for(const p of sim.players){if(p.team==='A'&&!originals.has(p))applyPlayer(p);if(p.sundayTouchGrace>0)p.sundayTouchGrace=Math.max(0,p.sundayTouchGrace-SOCCER_STEP);}
   wallContact=false;
-  const before=sim.ball.owner,beforeShot=sim.ball.isShot,phaseBefore=sim.matchState,wasFreeKick=sim.setPieceType==='freekick',shotBefore=flow.shots;sim.updateAll();frames++;
+  const before=sim.ball.owner,beforeShot=sim.ball.isShot,phaseBefore=sim.matchState,wasFreeKick=sim.setPieceType==='freekick',shotBefore=flow.shots;const previousBall=mutations?{x:sim.ball.x,y:sim.ball.y}:null;sim.updateAll();frames++;if(mutations)mutations.after(previousBall);
   if(arcade&&sim.matchState!==phaseBefore){const limits={kickoff:1,goal:2,halftime:2.5,freekick:1.1,penalty:1.3,card:1.2};const limit=limits[sim.matchState];if(limit!=null&&sim.stateTimer>limit)sim.stateTimer=limit;}
   snapshot();rocketKick=false;
   flow.phases[phaseBefore]=(flow.phases[phaseBefore]||0)+1;if(phaseBefore==='kickoff'){flow.kickoffTicks++;if(sim.players.filter(p=>p.role!=='GK'&&Math.hypot(p.x-field.centerX,p.y-field.centerY)<field.width*.09).length>2)flow.kickoffCrowdedTicks++;}if(phaseBefore==='play'){flow.playTicks++;if(zones&&frames%5===0){for(const p of sim.players){if(p.sundayAssignment&&!p.isSentOff){flow.assignmentTicks++;flow.assignmentCounts[p.sundayAssignment]=(flow.assignmentCounts[p.sundayAssignment]||0)+1;const counts=flow.teamAssignments[side(p.team)];counts[p.sundayAssignment]=(counts[p.sundayAssignment]||0)+1;}}}const owner=sim.ball.owner;if(owner){const right=sim.isSecondHalf()?owner.team==='B':owner.team==='A';const third=right?owner.x>field.width*2/3:owner.x<field.width/3;if(third&&lastThirdSide!==owner.team){flow.finalThirdEntries++;lastThirdSide=owner.team;}else if(!third)lastThirdSide=null;}}if(phaseBefore==='play'){if(sim.ball.owner)flow.ownedTicks++;if(frames%5===0){flow.shapeTicks++;const players=sim.players.filter(p=>p.role!=='GK'&&!p.isSentOff);const near=players.filter(p=>Math.hypot(p.x-sim.ball.x,p.y-sim.ball.y)<field.height*.13).length;if(near>=4)flow.crowdedTicks++;for(const key of ['A','B']){const ps=players.filter(p=>p.team===key);let n=0,d=0;for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){d+=Math.hypot(ps[i].x-ps[j].x,ps[i].y-ps[j].y)/field.height;n++;}flow.spreadSum+=n?d/n/2:0;}}flow.quiet=flow.shots>shotBefore?0:flow.quiet+SOCCER_STEP;flow.longestQuiet=Math.max(flow.longestQuiet,flow.quiet);}else flow.deadTicks++;
