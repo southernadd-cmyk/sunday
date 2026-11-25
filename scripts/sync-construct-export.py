@@ -11,11 +11,16 @@ project=ROOT/'construct';web=ROOT/'public'/'construct'
 assert 'Scirra Construct' in (web/'index.html').read_text()
 for name in ('main.js','controller.js','engine.js'):
  shutil.copyfile(project/'scripts'/name,web/'scripts'/'project'/name)
+project_archive=ROOT/'public'/'downloads'/'SUNDAY-Construct3.c3p'
+with zipfile.ZipFile(project_archive,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+ for p in sorted(project.rglob('*')):
+  if p.is_file() and p.suffix != '.md':
+   info=zipfile.ZipInfo(p.relative_to(project).as_posix(),date_time=(2026,11,25,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED;z.writestr(info,p.read_bytes())
 archive=ROOT/'public'/'downloads'/'SUNDAY-Construct3-Web.zip'
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
  for p in sorted(web.rglob('*')):
   if p.is_file():
    info=zipfile.ZipInfo(p.relative_to(web).as_posix(),date_time=(2026,11,25,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED;z.writestr(info,p.read_bytes())
-manifest={'editor':'Construct r506.4','format':'Web (HTML5)','native_export':True,'source_directory':'construct','web_directory':'public/construct','runtime_modified':False,'export_options':{'lossless':'PNG','deduplicate_images':True,'optimize_images':False,'minify':'None','offline_support':False},'project_script_sha256':{n:hashlib.sha256((project/'scripts'/n).read_bytes()).hexdigest() for n in ('main.js','controller.js','engine.js')},'checks':'Native package opened; Construct script validation passed; automated API-contract checks passed. Native GPU rendering unverified: test browser could not initialize WebGL.'}
+manifest={'editor':'Construct r506.4','format':'Web (HTML5)','native_export':True,'source_directory':'construct','web_directory':'public/construct','runtime_modified':False,'export_options':{'lossless':'PNG','deduplicate_images':True,'optimize_images':False,'minify':'None','offline_support':False},'project_script_sha256':{n:hashlib.sha256((project/'scripts'/n).read_bytes()).hexdigest() for n in ('main.js','controller.js','engine.js')},'checks':'Owned project scripts synchronized. See CI for automated contract checks. Native GPU rendering requires manual verification.'}
 (ROOT/'docs'/'CONSTRUCT3_EXPORT.json').write_text(json.dumps(manifest,indent=2)+'\n')
 print('Native Construct web export:',sum(p.stat().st_size for p in web.rglob('*') if p.is_file()),'bytes; zipped',archive.stat().st_size)

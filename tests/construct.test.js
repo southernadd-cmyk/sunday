@@ -33,6 +33,7 @@ function click(g,text){
  const [clientX,clientY]=g.field.layerToCssPx(b.x+b.w/2,b.y+b.h/2),event={pointerId:1,button:0,clientX,clientY};
  g.pointerDown(event);g.pointerUp(event);
 }
+function tapPlayer(g,id){const p=g.point(g.run.state.actors[id]);const [clientX,clientY]=g.field.layerToCssPx(p.x,p.y),e={pointerId:1,button:0,clientX,clientY};g.pointerDown(e);g.pointerUp(e);}
 function finish(g){assert.ok(g.anim);g.anim.elapsed=g.anim.duration;g.tick();assert.equal(g.busy,false);}
 
 test('native Construct package references existing types, scripts, layouts and original frames',()=>{
@@ -52,21 +53,30 @@ test('native Construct package references existing types, scripts, layouts and o
  for(const name of ['main.js','controller.js','engine.js'])assert.equal(readFileSync(new URL('../construct/scripts/'+name,import.meta.url),'utf8'),readFileSync(new URL('../public/construct/scripts/project/'+name,import.meta.url),'utf8'));
  assert.match(readFileSync(new URL('../public/construct/index.html',import.meta.url),'utf8'),/Scirra Construct/);
 });
-test('Construct buttons pass possession to Kev, then call a return while running into space',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');click(g,'KEV');
- assert.equal(g.order.kind,'pass');assert.equal(g.preview.type,'move');click(g,'PLAY 2 SECONDS');finish(g);assert.equal(g.run.state.ballOwner,1);
- click(g,'CALL');g.key({key:'q'});assert.equal(g.order.kind,'call');click(g,'PLAY 2 SECONDS');finish(g);
- assert.equal(g.run.state.ballOwner,0);assert.ok(g.run.state.actors[0].z<0);assert.equal(g.run.lives,3);
+test('pass transfers control, and a non-striker can plan a run',()=>{
+ const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');click(g,'PASS');tapPlayer(g,1);
+ assert.equal(g.order.kind,'pass');assert.equal(g.preview.type,'move');click(g,'PLAY 2s');finish(g);
+ assert.equal(g.run.state.ballOwner,1);assert.equal(g.selected,1);
+ g.key({key:'w'});assert.equal(g.order.actor,1);assert.equal(g.preview.order.actor,1);
+});
+test('off-ball plans survive selection and play simultaneously',()=>{
+ const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');
+ tapPlayer(g,4);const before=clone(g.run.state);g.key({key:'w'});tapPlayer(g,0);
+ assert.ok(g.support[4]?.length);g.key({key:'a'});assert.equal(g.order.actor,0);
+ assert.ok(g.preview.valid);g.play();finish(g);
+ assert.ok(distance(g.run.state.actors[4],before.actors[4])>0);
+ assert.ok(distance(g.run.state.actors[0],before.actors[0])>0);
+ g.key({key:'r'});assert.deepEqual(g.run.state,before);
 });
 test('one-two has an immediately playable suggested run and rewind restores possession and resources',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.key({key:'o'});
+ const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.key({key:'o'});tapPlayer(g,1);
  assert.equal(g.order.kind,'one-two');assert.ok(g.order.path.length);assert.equal(g.preview.type,'move');
- const before=clone(g.run.state);click(g,'PLAY 2 SECONDS');finish(g);assert.equal(g.run.state.passes,0);g.key({key:'r'});
+ const before=clone(g.run.state);click(g,'PLAY 2s');finish(g);assert.equal(g.run.state.passes,0);g.key({key:'r'});
  assert.deepEqual(g.run.state,before);assert.equal(g.run.rewinds,0);
 });
 test('native hit regions and pooled labels stay finite in a portrait viewport with a shifted origin',()=>{
  const r=runtime({width:960,height:2000,left:130,top:-600,cssScale:.375}),g=new Sunday(r);click(g,'STEP ONTO THE PITCH');
- const range=clone(g.run.state);click(g,'KEV');assert.equal(g.order.kind,'pass');
+ const range=clone(g.run.state);click(g,'PASS');tapPlayer(g,1);assert.equal(g.order.kind,'pass');
  assert.deepEqual(g.run.state,range);assert.equal(g.narrow,true);
  for(const b of g.buttons){assert.ok([b.x,b.y,b.w,b.h].every(Number.isFinite));assert.ok(b.x>=r.viewport.left&&b.x+b.w<=r.viewport.right+.001);}
  const fill=r.draws.find(d=>d.kind==='fill');assert.ok(Math.abs(fill.args[0]-12*g.u)<1e-8);assert.ok(Math.abs(fill.args[1]-12*g.u)<1e-8);
@@ -78,6 +88,14 @@ test('native pointer input plots a route and playback reaches the same ghost end
  assert.equal(g.order.kind,'run');const end={...g.preview.end};assert.equal(g.preview.type,'move');g.play();finish(g);assert.ok(distance(g.run.state.actors[0],end)<1e-8);
 });
 test('a learned dink is available on touch controls and cannot leak into a fresh run',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.buffs.chip=1;g.refresh();click(g,'DINK');assert.equal(g.chip,true);
+ const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.buffs.chip=1;g.refresh();click(g,'SHOOT');click(g,'DINK');assert.equal(g.chip,true);
  g.newRun();assert.equal(g.run.buffs.chip,0);assert.equal(g.chip,false);assert.ok(!g.buttons.some(b=>b.label.text==='DINK ON'));
+});
+
+test('any outfielder can shoot, pass back to the striker, and receive a one-two',()=>{
+ const g=new Sunday(runtime());const r=g.run;r.state.ballOwner=1;r.state.actors[1].x=0;r.state.actors[1].z=-32;r.state.ball={x:.5,z:-33,y:.6};r.intents=r.makeIntents();
+ assert.ok(r.preview({kind:'shot',actor:1,target:{x:5}}).valid);
+ assert.ok(r.preview({kind:'pass',actor:1,ally:0,path:[]}).valid);
+ assert.ok(r.suggestOneTwo(0,{actor:1}));
+ assert.equal(r.preview({kind:'shot',actor:0,target:{x:5}}).valid,false);
 });
