@@ -137,6 +137,24 @@ outfield=patch(outfield,'if (distToGoal < getShootRange(p)', `if (Settings.SUNDA
                 if (distToGoal < getShootRange(p)`);
 outfield=patch(outfield,'const tryShoot = willingness >= 1 || Math.random() < willingness;', 'const tryShoot = (Settings.SUNDAY_ATTACK && p.passLinkCooldown > 0 && p.lastPassFrom && distToGoal < field.width * .30) || willingness >= 1 || Math.random() < willingness;');
 outfield=patch(outfield,'const passChance = computeDribblePassChance(p, threat);','const passChance = Settings.SUNDAY_ATTACK ? Math.max(computeDribblePassChance(p, threat), threat.threatened ? .68 : .26) : computeDribblePassChance(p, threat);');
+// The intent director chooses an action at the normal decision gate. Keep
+// upstream physics and pass/shot FSMs; do not force possession or scoring.
+outfield=patch(outfield,'const distToGoal = Math.abs(p.x - targetGoalX);', `const distToGoal = Math.abs(p.x - targetGoalX);
+                if (Settings.SUNDAY_INTENT && p.level.sundayPossessionDecision) {
+                    const team = getTeamEntity(p);
+                    const pass = p.findBestPassTarget();
+                    const shot = distToGoal < field.width*.31 && team && typeof team.canShoot === 'function' ? team.canShoot({x:p.x,y:p.y},p) : null;
+                    const action = p.level.sundayPossessionDecision(p,{pass,shot,threat});
+                    if (action==='shoot' && shot?.ok) {
+                        p.shotAim=shot.target;
+                        p.fsm.changeState(PlayerStates.Shoot);return;
+                    }
+                    if (action==='pass' && pass?.teammate) {
+                        p.passTarget=pass.teammate;p.passType=pass.type;p.passAim=pass.aim||null;
+                        p.fsm.changeState(PlayerStates.Pass);return;
+                    }
+                    return;
+                }`);
 // Use the native slide FSM, but record every launch (including misses)
 // separately from the actual tackle contact roll.
 outfield=patch(outfield,'p.isSliding = true;\n                        p.slideTimer = 0.65;', `p.isSliding = true;
@@ -152,6 +170,7 @@ writeFileSync(resolve(upstream,safetyFile),safety+'\n');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
 copyFileSync(resolve(root,'scripts/engine-evaluation/five-tactics.js'),resolve(upstream,'five-tactics.js'));
+copyFileSync(resolve(root,'scripts/engine-evaluation/possession-intent.js'),resolve(upstream,'possession-intent.js'));
 const license=readFileSync(resolve(upstream,'LICENSE'),'utf8');
 const entry="export {createSoccerMatch,SOCCER_STEP,CHIPS,chipOffers,RELOAD_COST} from "+JSON.stringify(adapter)+";\nexport {AUTO_TRAITS} from "+JSON.stringify(resolve(root,'src/engine.js'))+";";
 const result=await build({stdin:{contents:entry,resolveDir:root,sourcefile:'sunday-soccer-entry.js'},bundle:true,platform:'browser',format:'esm',target:'es2022',minify:true,write:false,legalComments:'inline',banner:{js:'/* Generated SUNDAY Soccer-JS bundle; upstream '+pin+'\\n'+license.replaceAll('*/','* /')+'\\n*/'}});
