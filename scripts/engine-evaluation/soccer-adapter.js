@@ -84,7 +84,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  await sim.start();sim.active=true;
  const field=Utils.getFieldBounds(),events=[],stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackleAttempts:0,tackles:0,slideStarts:0,slideAttempts:0,slideWins:0,firstTouches:0,cleanTouches:0,passTouches:0,cleanPassTouches:0,touchControlSum:0,interceptions:0,saves:0,blocks:0,possession:0,bestChain:0,progressive:0}));
  let lastCompleted=null,lastThirdSide=null;
- let directFlight=null,layoff=null;
+ let directFlight=null,layoff=null,wallContact=false;
  let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
  const originals=new Map();
  const flow={freeKicks:{awarded:0,planned:0,eligible:0,probed:0,driven:0,curled:0,dipped:0,layoffs:0,layoffShots:0,shotGoals:0,shotSaves:0,shotWallBlocks:0,shotDeflections:0,shotMisses:0,shotUnresolved:0,shots:0,passes:0,releasedShots:0,releasedPasses:0,completedPasses:0,interceptedPasses:0,indirect:0,wallPlayers:0,clearanceViolations:0,byTeam:[0,0]},intentDecisions:0,intentCounts:{},intentActions:{},teamAssignments:[{},{}],teamIntentActions:[{},{}],assignmentTicks:0,assignmentCounts:{},kickoffTicks:0,kickoffCrowdedTicks:0,finalThirdEntries:0,createdShots:0,crowdedTicks:0,shapeTicks:0,spreadSum:0,ownedTicks:0,threePassChains:0,returnPasses:0,shotZones:[0,0,0],playTicks:0,deadTicks:0,boardBounces:0,turnovers:0,shots:0,goals:0,longestQuiet:0,quiet:0,phases:{}};
@@ -173,9 +173,10 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
    layoff={team:taker.team,receiver:target,until:frames+65};flow.freeKicks.layoffs++;
   };
  }
+ sim.sundayOnWallBlock=function(){wallContact=true;};
  sim.sundayOnFreekickChoice=function(action,team,aim,routine){
   flow.freeKicks[action==='shoot'?'shots':'passes']++;
-  if(routine&&Object.hasOwn(flow.freeKicks,routine))flow.freeKicks[routine]++;
+  if(routine&&Object.hasOwn(flow.freeKicks,routine)){flow.freeKicks[routine]++;event('FREE KICK: '+routine.toUpperCase(),team,'shot');}
   state.lastFreeKick={action,team,routine:routine||null,aim:aim?{x:aim.x,y:aim.y}:null,half:sim.isSecondHalf()?2:1};
  };
  // Let the original goal geometry decide whether a shot really crosses the line.
@@ -355,6 +356,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   // Reapply team-local knobs before the tick; upstream owns every decision.
   Settings.AI.A=home;Settings.AI.B=away;Time.deltaTime=SOCCER_STEP;
   for(const p of sim.players){if(p.team==='A'&&!originals.has(p))applyPlayer(p);if(p.sundayTouchGrace>0)p.sundayTouchGrace=Math.max(0,p.sundayTouchGrace-SOCCER_STEP);}
+  wallContact=false;
   const before=sim.ball.owner,beforeShot=sim.ball.isShot,phaseBefore=sim.matchState,wasFreeKick=sim.setPieceType==='freekick',shotBefore=flow.shots;sim.updateAll();frames++;
   if(arcade&&sim.matchState!==phaseBefore){const limits={kickoff:1,goal:2,halftime:2.5,freekick:1.1,penalty:1.3,card:1.2};const limit=limits[sim.matchState];if(limit!=null&&sim.stateTimer>limit)sim.stateTimer=limit;}
   snapshot();rocketKick=false;
@@ -372,9 +374,10 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
    const fk=flow.freeKicks,scored=state.score[side(directFlight.team)]>lastScore[side(directFlight.team)];
    let outcome=null;
    if(scored)outcome='shotGoals';
+   else if(wallContact)outcome='shotWallBlocks';
    else if(after&&after.team!==directFlight.team&&after.role==='GK')outcome='shotSaves';
-   else if(after||(!sim.ball.isShot&&frames>directFlight.frame)||flow.shots>shotBefore&&!releasedFreeKick)outcome='shotDeflections';
    else if(sim.matchState==='goalkick'||sim.matchState==='throwin'||sim.matchState==='corner')outcome='shotMisses';
+   else if(after||(!sim.ball.isShot&&frames>directFlight.frame)||flow.shots>shotBefore&&!releasedFreeKick)outcome='shotDeflections';
    else if(frames-directFlight.frame>100||state.finished)outcome='shotUnresolved';
    if(outcome){fk[outcome]++;state.lastFreeKickOutcome=outcome;directFlight=null;}
   }
