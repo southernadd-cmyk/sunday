@@ -32,6 +32,7 @@ jobs:
           cp scripts/engine-evaluation/soccer-adapter.js candidates/soccer-js/sunday-adapter.js
           cp scripts/engine-evaluation/five-tactics.js candidates/soccer-js/five-tactics.js
           cp scripts/engine-evaluation/possession-intent.js candidates/soccer-js/possession-intent.js
+          cp scripts/engine-evaluation/mutations.js candidates/soccer-js/mutations.js
           mkdir -p adapter-proof
           ./node_modules/.bin/esbuild candidates/soccer-js/sunday-adapter.js --bundle --platform=browser --format=esm --outfile=adapter-proof/soccer-adapter.mjs
           cp candidates/soccer-js/LICENSE adapter-proof/LICENSE
