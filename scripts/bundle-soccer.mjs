@@ -14,6 +14,12 @@ if(!existsSync(resolve(upstream,'.git'))){
 let head='';try{head=git('rev-parse','--verify','HEAD');}catch{}
 if(head!==pin){git('fetch','--depth=1','origin',pin);git('checkout','--detach','--force',pin);}
 if(git('rev-parse','HEAD')!==pin)throw new Error('Soccer-JS revision mismatch');
+// Permit the additional five-a-side preset only; retain the normal eleven-player path.
+for(const file of ['kernel/providers/simulator/simulator.js','kernel/core/entities/team.js']){
+ const original=git('show','HEAD:'+file);
+ if(!original.includes('formation.length !== 11'))throw new Error('Upstream formation guard changed: '+file);
+ writeFileSync(resolve(upstream,file),original.replace('formation.length !== 11','(formation.length !== 11 && formation.length !== 5)')+'\n');
+}
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
 const license=readFileSync(resolve(upstream,'LICENSE'),'utf8');
