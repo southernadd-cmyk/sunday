@@ -7,20 +7,25 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 // Authored depth anchors for build-up, middle third, and final-third support.
 // Rows correspond to the seven ball depth bands; columns CB, LM, RM, CF.
 const DEPTH={
- attack:[[.12,.29,.33,.46],[.18,.38,.42,.55],[.25,.48,.52,.65],[.34,.58,.62,.75],[.42,.68,.72,.84],[.49,.75,.80,.90],[.55,.77,.86,.93]],
- defend:[[.10,.18,.18,.34],[.12,.22,.22,.37],[.17,.30,.30,.44],[.23,.38,.38,.52],[.31,.46,.46,.60],[.39,.54,.54,.68],[.47,.62,.62,.76]],
+ attack:[[.12,.24,.24,.48],[.12,.28,.28,.48],[.13,.36,.36,.58],[.27,.49,.49,.72],[.41,.63,.63,.86],[.55,.72,.72,.91],[.57,.78,.78,.91]],
+ defend:[[.12,.22,.22,.40],[.12,.22,.22,.40],[.13,.23,.23,.48],[.26,.37,.37,.62],[.40,.51,.51,.76],[.55,.65,.65,.88],[.57,.78,.78,.88]],
 };
 const LANES=[.10,.30,.50,.70,.90];
 function cell(mode,row,col){
- const y=LANES[col],left=y<.5,right=y>.5,depth=DEPTH[mode][row],att=mode==='attack';
- // Ball-side outlet + far-side runner, central pivot, and deepest rest defender.
+ const y=LANES[col],left=y<.5,right=y>.5,depth=DEPTH[mode][row],att=mode==='attack',ballDepth=(row+.5)/7;
+ // Distinct near/far outlets avoid forming a flat line across the pitch.
+ // As the ball advances, keep one player behind the carrier and one ahead.
  const wing=(isLeft,i)=>{
-  const near=isLeft?left:right, far=isLeft?right:left;
-  const x=depth[i]+(att?(far?.035:near?-.025:0):(near?-.025:0));
-  const lat=isLeft?(near?.21:.25):(near?.79:.75);
+  const near=isLeft?left:right,far=isLeft?right:left;
+  let x=depth[i],lat=isLeft?.20:.80;
+  if(att){
+   if(far){x=clamp(ballDepth+.18,.40,.86);lat=isLeft?.30:.70;}
+   else if(near){x=clamp(ballDepth-.055,.22,.82);lat+=(y-.5)*.10;}
+   else{x=clamp(ballDepth+.065,.22,.78);}
+  }else{lat+=(y-.5)*.12;}
   return [clamp(x,.08,.94),lat];
  };
- return {CB:[depth[0],.5+(y-.5)*.22],LM:wing(true,1),RM:wing(false,2),CF:[depth[3],.5+(y-.5)*(att?-.24:.18)]};
+ return {CB:[depth[0],.5+(y-.5)*.30],LM:wing(true,1),RM:wing(false,2),CF:[depth[3],att?.5-(y-.5)*.20:.5+(y-.5)*.20]};
 }
 export const TACTICAL_MAP=Object.freeze(Object.fromEntries(['attack','defend'].map(mode=>[mode,Object.freeze(Array.from({length:7},(_,row)=>Object.freeze(Array.from({length:5},(_,col)=>Object.freeze(Object.fromEntries(Object.entries(cell(mode,row,col)).map(([role,xy])=>[role,Object.freeze(xy)])))))))])));
 export function tacticalTarget(role,mode,depth,lateral){
