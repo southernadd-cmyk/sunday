@@ -6,11 +6,15 @@ async function run(seed,profile){
  for(let i=0;i<20000&&!m.finished;i++){m.step();assert.ok(Number.isFinite(m.ball.x)&&Number.isFinite(m.ball.z));}
  assert.ok(m.finished,'match must finish');
  const f=m.flow;
- return {seed,profile,score:m.score.join('-'),kickoffCrowding:f.kickoffCrowdedTicks,entries:f.finalThirdEntries,created:f.createdShots,assignments:f.assignmentTicks,crowding:f.crowdedTicks/Math.max(1,f.shapeTicks),spread:f.spreadSum/Math.max(1,f.shapeTicks),controlled:f.ownedTicks/Math.max(1,f.playTicks),chains:f.threePassChains,goals:f.goals,returns:f.returnPasses,shotZones:f.shotZones,shots:f.shots,passes:m.stats.reduce((n,t)=>n+t.completed,0),boards:f.boardBounces,live:f.playTicks/(f.playTicks+f.deadTicks),longestQuiet:f.longestQuiet,offside:f.phases.offside||0,deadSeconds:f.deadTicks*SOCCER_STEP};
+ const sumStats=k=>m.stats.reduce((n,t)=>n+t[k],0);
+ for(const t of m.stats){assert.ok(Number.isInteger(t.tackleAttempts)&&t.tackleAttempts>=t.tackles&&t.tackles>=0);assert.ok(Number.isInteger(t.interceptions)&&t.interceptions>=0);}
+ const attempts=sumStats('tackleAttempts'),tackles=sumStats('tackles'),interceptions=sumStats('interceptions');
+ return {seed,profile,score:m.score.join('-'),kickoffCrowding:f.kickoffCrowdedTicks,entries:f.finalThirdEntries,created:f.createdShots,tackleAttempts:attempts,tackles,interceptions,tackleSuccess:attempts?tackles/attempts:null,tacklesPerLiveMinute:tackles*60/Math.max(1,f.playTicks*SOCCER_STEP),interceptionsPerLiveMinute:interceptions*60/Math.max(1,f.playTicks*SOCCER_STEP),defenceByTeam:m.stats.map(t=>({attempts:t.tackleAttempts,tackles:t.tackles,interceptions:t.interceptions})),assignments:f.assignmentTicks,crowding:f.crowdedTicks/Math.max(1,f.shapeTicks),spread:f.spreadSum/Math.max(1,f.shapeTicks),controlled:f.ownedTicks/Math.max(1,f.playTicks),chains:f.threePassChains,goals:f.goals,returns:f.returnPasses,shotZones:f.shotZones,shots:f.shots,passes:m.stats.reduce((n,t)=>n+t.completed,0),boards:f.boardBounces,live:f.playTicks/(f.playTicks+f.deadTicks),longestQuiet:f.longestQuiet,offside:f.phases.offside||0,deadSeconds:f.deadTicks*SOCCER_STEP};
 }
 test('five-a-side match flow comparison across independent seeds',async()=>{
  let rows=[];for(const seed of [12345,728,9921,1467,2781,511])for(const profile of ['original','arcade','express','shape','attack','zones'])rows.push(await run(seed,profile));
  console.log('MATCH_FLOW_COMPARISON '+JSON.stringify(rows));
+ for(const profile of ['original','arcade','express','shape','attack','zones']){const rs=rows.filter(r=>r.profile===profile);assert.ok(rs.some(r=>r.tackleAttempts>0),'Observed real tackle attempts: '+profile);assert.ok(rs.some(r=>r.interceptions>0),'Observed intercepted passes: '+profile);}
  const tuned=rows.filter(r=>r.profile==='arcade'),base=rows.filter(r=>r.profile==='original');
  const sum=(rs,k)=>rs.reduce((n,r)=>n+r[k],0);
  assert.ok(tuned.every(r=>r.offside===0),'no offside in arcade');
