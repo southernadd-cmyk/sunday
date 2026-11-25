@@ -75,7 +75,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  if(format===5)sim.teamStatsPreset={};
  if(express){const stats=(o)=>({...statsPreset.default_stats,...o});const squad=[stats({goalkeeping:67,speed:63,passing:78}),stats({speed:66,tackling:76,passing:80}),stats({speed:84,dribbling:84,passing:85,shooting:76}),stats({speed:80,dribbling:79,passing:87,shooting:78}),stats({speed:76,shooting:90,accuracy:88,dribbling:80})];sim.teamStatsPreset={England:squad,Scotland:squad};}
  await sim.start();sim.active=true;
- const field=Utils.getFieldBounds(),events=[],stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackles:0,interceptions:0,saves:0,blocks:0,possession:0,bestChain:0,progressive:0}));
+ const field=Utils.getFieldBounds(),events=[],stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackleAttempts:0,tackles:0,interceptions:0,saves:0,blocks:0,possession:0,bestChain:0,progressive:0}));
  let lastCompleted=null,lastThirdSide=null;
  let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
  const originals=new Map();
@@ -231,7 +231,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  for(const p of sim.players)if(p.team==='A')remember(p);
  function event(text,team,kind='play'){events.unshift({time:state.time,text,side:team==='A'||team==='B'?side(team):-1,kind});if(events.length>8)events.pop();}
  sim._telemetry={
-  onTackleAttempt({tackler,success}){if(success&&tackler){stats[side(tackler.team)].tackles++;if(tackler.team==='A')gainCharge();event('BALL WON',tackler.team,'tackle');}},
+  onTackleAttempt({tackler,success}){if(!tackler)return;const a=stats[side(tackler.team)];a.tackleAttempts++;if(success){a.tackles++;if(tackler.team==='A')gainCharge();event('BALL WON',tackler.team,'tackle');}},
   onShotKicked({team}){flow.shots++;if(lastCompleted&&lastCompleted.to.team===team&&frames-lastCompleted.frame<80)flow.createdShots++;const p=sim.ball.owner||sim.ball.lastKicker;if(p){const right=sim.isSecondHalf()?team==='B':team==='A',dist=Math.abs(p.x-(right?field.width:0))/field.width;flow.shotZones[Math.min(2,Math.floor(dist*3))]++;}stats[side(team)].shots++;event('SHOT!',team,'shot');rocketKick=team==='A'&&state.chips.some(c=>c.id==='rocket'&&c.status==='active');},
   onProgressivePass({team}){stats[side(team)].progressive++;},
   onBlock(info){if(info?.team==='A'||info?.team==='B')stats[side(info.team)].blocks++;event('SHOT BLOCKED',info?.team,'save');}
