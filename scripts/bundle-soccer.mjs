@@ -41,11 +41,11 @@ playerText=playerText.replace('const touch = applyFirstTouch(player, ball, { for
         player.level._telemetry.onFirstTouch({ player, fumbled: touch.fumbled, control: touch.control, incomingSpeed, receivedPass: !!receivedPass });
     }
     if (Settings.SUNDAY_ZONES && receivedPass && !touch.fumbled) player.sundayTouchGrace = .10;`);
-playerText=playerText.replace('if (isGkProtected(owner)) return false;', 'if (isGkProtected(owner)) return false;\\n    if (Settings.SUNDAY_ZONES && owner.sundayTouchGrace > 0) return false;');
+playerText=playerText.replace('if (isGkProtected(owner)) return false;', 'if (isGkProtected(owner)) return false;\n    if (Settings.SUNDAY_ZONES && owner.sundayTouchGrace > 0) return false;');
 // Let the team-local first-touch settings actually apply on the new profile.
 const touchFile='kernel/core/lib/first_touch.js';
 let touchText=git('show','HEAD:'+touchFile);
-touchText=touchText.replace('function aiNum(key, fallback) {', 'function aiNum(key, fallback, player) {\\n    if (Settings.SUNDAY_ZONES && player?.team && typeof Settings.AI?.[player.team]?.[key] === "number") return Settings.AI[player.team][key];');
+touchText=touchText.replace('function aiNum(key, fallback) {', 'function aiNum(key, fallback, player) {\n    if (Settings.SUNDAY_ZONES && player?.team && typeof Settings.AI?.[player.team]?.[key] === "number") return Settings.AI[player.team][key];');
 touchText=touchText.replace('function computeFumbleChance(control, ballSpeed) {','function computeFumbleChance(control, ballSpeed, player) {');
 touchText=touchText.replace(/aiNum\(('FIRST_TOUCH_[A-Z_]+'), ([A-Z_]+)\)/g, 'aiNum($1, $2, player)');
 touchText=touchText.replace('computeFumbleChance(control, speed);','computeFumbleChance(control, speed, player);');
@@ -139,7 +139,7 @@ outfield=patch(outfield,'const tryShoot = willingness >= 1 || Math.random() < wi
 outfield=patch(outfield,'const passChance = computeDribblePassChance(p, threat);','const passChance = Settings.SUNDAY_ATTACK ? Math.max(computeDribblePassChance(p, threat), threat.threatened ? .68 : .26) : computeDribblePassChance(p, threat);');
 // Use the native slide FSM, but record every launch (including misses)
 // separately from the actual tackle contact roll.
-outfield=patch(outfield,'p.isSliding = true;\\n                        p.slideTimer = 0.65;', `p.isSliding = true;
+outfield=patch(outfield,'p.isSliding = true;\n                        p.slideTimer = 0.65;', `p.isSliding = true;
                         p.slideTimer = 0.65;
                         p.level?._telemetry?.onSlideStarted?.({player:p});`);
 writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
