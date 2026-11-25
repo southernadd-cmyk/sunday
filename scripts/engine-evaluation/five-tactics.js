@@ -161,17 +161,17 @@ export function freeKickLayout({width,height,x,y,attackers,defenders,indirect=fa
 // Direct restart planner. Accepts the engine's real flight predictor and
 // evaluates physically reachable goal-line crossings, not guaranteed goals.
 // The goalkeeper affects target preference, never an automatic veto.
-export function planDirectFreeKick({from,goal,wall=[],defenders=[],keeper=null,speed,shooting=65,accuracy=70,predict,variedDelivery=true}){
+export function planDirectFreeKick({from,goal,wall=[],defenders=[],keeper=null,speed,shooting=65,accuracy=70,predict,variedDelivery=true,balancedSelection=true}){
  const distance=Math.hypot(goal.lineX-from.x,(goal.yMin+goal.yMax)/2-from.y);
  if(distance<2||distance>23||!Number.isFinite(speed)||speed<=0)return null;
  const sign=Math.sign(goal.lineX-from.x),mid=(goal.yMin+goal.yMax)/2,span=goal.yMax-goal.yMin;
  const style=[
   {routine:'driven',heightSpeed:0.35,curveForce:0,speedMul:1},
-  ...[sign,-sign].flatMap(direction=>(variedDelivery?[.76,.90,1]:[1]).map(speedMul=>({routine:'curled',heightSpeed:1.8,curveForce:direction*2.6,speedMul}))),
+  ...[sign,-sign].flatMap(direction=>(variedDelivery?[.76,.90,1]:[1]).flatMap(speedMul=>(balancedSelection?[2.6,4.0,5.4]:[2.6]).map(curve=>({routine:'curled',heightSpeed:1.8,curveForce:direction*curve,speedMul})))),
   ...(variedDelivery?[.42,.54,.66,.78,1]:[1]).flatMap(speedMul=>[6.5,7,8,9,10,11].map(heightSpeed=>({routine:'dipped',heightSpeed,curveForce:0,speedMul})))
  ];
- let best=null;
- for(const st of style)for(const offset of [-.8,-.45,0,.45,.8]){
+ let best=null;const byRoutine={};
+ for(const st of style)for(const offset of (balancedSelection?[-.94,-.8,-.6,-.45,-.2,0,.2,.45,.6,.8,.94]:[-.8,-.45,0,.45,.8])){
   // Curved kicks start slightly outside the final target corridor.
   const aim={x:goal.lineX,y:mid+offset*span*.5-st.curveForce*.22*distance/10};
   const dx=aim.x-from.x,dy=aim.y-from.y,d=Math.hypot(dx,dy);
@@ -208,8 +208,25 @@ export function planDirectFreeKick({from,goal,wall=[],defenders=[],keeper=null,s
   if(variedDelivery&&st.routine==='dipped'&&!(cross.vz<-.2&&cross.z>.2))continue;
   const pacePenalty=variedDelivery?Math.max(0,cross.t-.75)*.17+Math.max(0,8-cross.arrivalSpeed)*.035:0;
   const score=1.4+Math.min(2.6,keeperGap)*.34+Math.min(.9,margin)*.20-risk-distance*.045-complexity*(1.35-skill)-pacePenalty;
-  if(!best||score>best.score)best={...st,aim,score,cross};
+  const candidate={...st,aim,score,cross};
+  if(!best||score>best.score)best=candidate;
+  if(!byRoutine[st.routine]||score>byRoutine[st.routine].score)byRoutine[st.routine]=candidate;
  }
  // Do not force a shot if the flight geometry is poor.
- return best&&best.score>.43?best:null;
+ if(!balancedSelection)return best&&best.score>.43?best:null;
+ // A physical possibility is not automatically a sensible match decision.
+ // Fast, uncomplicated shots win ties; slower loft is a specialist option.
+ // A close-range clear angle favours a drive; a wall and lateral angle
+ // favour a curled delivery if it can genuinely clear the obstruction.
+ const skill=(shooting+accuracy)/200;
+ const angle=Math.abs(from.y-mid)/Math.max(1,distance);
+ const candidates=Object.values(byRoutine).map(c=>{
+  const adjustment=c.routine==='driven'?.12:
+    c.routine==='curled'?(wall.length?.11:.015)+Math.min(.10,angle*.22):
+    -(.28+Math.max(0,.70-skill)*.45+Math.max(0,.65-c.speedMul)*.6);
+  return {...c,selectionScore:c.score+adjustment};
+ }).sort((a,b)=>b.selectionScore-a.selectionScore);
+ const selected=candidates[0];
+ // Keep a safe restart when all routes are poor rather than invent a shot.
+ return selected&&selected.selectionScore>.58?selected:null;
 }
