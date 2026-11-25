@@ -1,13 +1,7 @@
 # SUNDAY — native Construct 3
 
-[Play](https://southernadd-cmyk.github.io/sunday/construct/) · [Download project](https://southernadd-cmyk.github.io/sunday/downloads/SUNDAY-Construct3.c3p) · [Web export](https://southernadd-cmyk.github.io/sunday/downloads/SUNDAY-Construct3-Web.zip)
+[Play](https://southernadd-cmyk.github.io/sunday/construct/) · [Project](https://southernadd-cmyk.github.io/sunday/downloads/SUNDAY-Construct3.c3p) · [Web export](https://southernadd-cmyk.github.io/sunday/downloads/SUNDAY-Construct3-Web.zip)
 
-Open the single-file project in Construct 3 and preview with F5. The existing native Sprite, Drawing Canvas and Text objects render an autonomous match. Start Game opens the behaviour draft; football plays automatically. Pause, 1×/2×/4×, and full-time statistics are available. There are no movement orders or legacy tactical mode in the playable interface.
+Open the single-file project in Construct 3 and preview with F5. The native Sprite, Drawing Canvas and Text objects render a five-a-side match with a vertically scrolling pitch and an integrated mutation hand. The game uses the pinned Soccer-JS simulation and the six tested mutations, with adaptive opposition enabled. Drag a power token onto a player or pitch location and release. Play freezes during the drag. Invalid drops cancel without spending the token. Squeeze is deployed onto the pitch like other powers. Ten seconds per power, one use per match. Tap the clock or press Space to pause; hold the clock or press Escape to return to title. Tap anywhere at half-time or full-time to continue.
 
-The owned project scripts are synchronized to the native export during build. No Construct runtime files or third-party assets are modified.
-
-The downloadable project includes the generated Soccer-JS module with the upstream MIT notice. If opening the source directory from GitHub instead, run `npm ci` and `npm run prebuild` first. The project dynamically expands its native sprite pool to 22 footballers. Matches simulate five minutes at 4× base playback, with additional 2×/4× viewing controls.
-
-Half-time pauses the match until a second-half plan is selected. Touchline calls modify Soccer-JS team-local AI settings for ten in-game minutes, twice per half; they never directly move players or decide outcomes.
-
-The chip collection replaces tactics. Eight chips change real player attributes or shot physics, and support event-triggered combinations. Earn charge from football actions to reload a chip once per fixture. Choose an additional chip before each fixture and at half-time.
+The owned scripts synchronize to the existing native web export at build time. No Construct runtime files are edited. To open the source directory, run `npm ci` and `npm run prebuild` first. Native GPU rendering still requires a manual browser/editor playtest. This version is a single-match prototype; roguelite run progression will follow playtesting.

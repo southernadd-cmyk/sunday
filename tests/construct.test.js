@@ -28,11 +28,6 @@ function runtime({width=960,height=640,left=0,top=0,cssScale=1}={}){
  }
  return {objects:types,layout:{getLayer:()=>layer},addEventListener:(name,fn)=>handlers.set(name,fn),handlers,draws,layer,viewport};
 }
-function click(g,text){
- const b=[...g.buttons].reverse().find(b=>b.label.text===text);assert.ok(b,'Missing button: '+text);
- const [clientX,clientY]=g.field.layerToCssPx(b.x+b.w/2,b.y+b.h/2),event={pointerId:1,button:0,clientX,clientY};
- g.pointerDown(event);g.pointerUp(event);
-}
 test('native Construct package references existing types, scripts, layouts and original frames',()=>{
  const project=json('project.c3proj'),layout=json('layouts/Saltmere.json'),uids=new Set(),sids=new Set();
  assert.equal(project.runtime,'c3');assert.equal(layout.layers.length,2);
@@ -51,47 +46,48 @@ test('native Construct package references existing types, scripts, layouts and o
  assert.match(readFileSync(new URL('../public/construct/index.html',import.meta.url),'utf8'),/Scirra Construct/);
 });
 
-test('title offers exactly Start Game and Instructions, with no legacy movement controls',async()=>{
- const g=new Sunday(runtime());assert.deepEqual(g.buttons.map(b=>b.label.text),['START GAME','INSTRUCTIONS']);
- click(g,'INSTRUCTIONS');click(g,'BACK');click(g,'START GAME');assert.equal(g.auto.phase,'draft');
- const id=g.auto.offers[0];await g.autoChoose(id);assert.deepEqual(g.auto.chips,[id]);assert.equal(g.auto.phase,'match');assert.equal(g.auto.match.upstream,'soccer-js');assert.equal(g.auto.match.actors.length,22);assert.equal(g.actors.filter(a=>a.isVisible).length,22);
- assert.ok(!g.buttons.some(b=>/PLAY 2s|SPRINT|TACKLE|SHOOT/.test(b.label.text)));
- const point=g.point({x:0,z:0}),[clientX,clientY]=g.field.layerToCssPx(point.x,point.y),ev={pointerId:1,button:0,clientX,clientY};
- g.pointerDown(ev);g.pointerUp(ev);assert.equal(g.drag,null);
- click(g,'PAUSE');const time=g.auto.match.time;g.advanceAuto(2);assert.equal(g.auto.match.time,time);click(g,'PLAY');click(g,'4×');
- for(let i=0;i<60&&g.auto.phase!=='result';i++){if(g.auto.phase==='halftime'){const time=g.auto.match.time;g.advanceAuto(10);assert.equal(g.auto.match.time,time);assert.equal(g.auto.offers.length,3);g.resumeHalf(g.auto.offers[0]);}else g.advanceAuto(1);}
- assert.equal(g.auto.phase,'result');assert.equal(g.auto.results.length,1);click(g,'NEXT CHIP SHOP');assert.equal(g.auto.phase,'draft');assert.ok(!g.auto.offers.includes(id));
- for(let round=1;round<=2;round++){
-  await g.autoChoose(g.auto.offers[0]);assert.equal(g.auto.match.upstream,'soccer-js');assert.equal(g.auto.chips.length,round*2+1);
-  for(let i=0;i<60&&g.auto.phase!=='result';i++){if(g.auto.phase==='halftime'){const time=g.auto.match.time;g.advanceAuto(10);assert.equal(g.auto.match.time,time);assert.equal(g.auto.offers.length,3);g.resumeHalf(g.auto.offers[0]);}else g.advanceAuto(1);}
-  assert.equal(g.auto.phase,'result');assert.equal(g.auto.results.length,round+1);
-  if(round===1)click(g,'NEXT CHIP SHOP');
- }
- click(g,'MAIN MENU');assert.equal(g.auto,null);
+async function start(g){await g.startAuto(12345);assert.equal(g.auto.phase,'match');assert.equal(g.auto.match.actors.length,10);assert.equal(g.actors.filter(a=>a.isVisible).length,10);assert.ok(g.auto.match.adaptiveOpponent);assert.ok(g.auto.match.mutations);}
+function openPlay(g){for(let i=0;i<800&&!g.auto.match.mutations.canActivate;i++)g.advanceAuto(.05);assert.ok(g.auto.match.mutations.canActivate);}
+function event(g,x,y,pointerId=1){const [clientX,clientY]=g.field.layerToCssPx(x,y);return {pointerId,button:0,clientX,clientY};}
+function tap(g,x,y){const e=event(g,x,y);g.pointerDown(e);g.pointerUp(e);}
+function grab(g,id){const t=g.tokens.find(t=>t.id===id);assert.ok(t?.enabled,id+' must be ready');const e=event(g,t.x+t.w/2,t.y+t.h/2);g.pointerDown(e);assert.equal(g.auto.armed,id);return e;}
+function release(g,x,y){const e=event(g,x,y);g.pointerMove(e);g.pointerUp(e);}
+function inBounds(g){assert.equal(g.buttons,undefined);for(const t of g.tokens){assert.ok(t.x>=g.v.left-1e-6&&t.x+t.w<=g.v.right+1e-6,t.id+' horizontal');assert.ok(t.y>=g.v.top-1e-6&&t.y+t.h<=g.v.bottom+1e-6,t.id+' vertical');}}
+test('native title uses tap anywhere and match has no buttons',async()=>{
+ const g=new Sunday(runtime());assert.equal(g.tokens.length,0);assert.equal(g.buttons,undefined);
+ tap(g,480,320);assert.equal(g.auto.phase,'loading');for(let i=0;i<100&&g.auto.phase==='loading';i++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(g.auto.phase,'match');
+ assert.equal(g.auto.match.actors.length,10);assert.equal(g.tokens.length,6);assert.ok(g.tokens.some(t=>t.id==='giant'));
+ tap(g,480,12);const time=g.auto.match.time;g.advanceAuto(2);assert.equal(g.auto.match.time,time);assert.equal(g.auto.paused,true);tap(g,480,12);assert.equal(g.auto.paused,false);
 });
-test('native autoplay controls remain in view on portrait and desktop',async()=>{
+test('native pitch stays vertical, scrolls, and inverse coordinates round trip',async()=>{
+ for(const opts of [{},{width:960,height:2000,left:130,top:-600,cssScale:.375},{width:960,height:540,cssScale:.65}]){
+  const g=new Sunday(runtime(opts));await start(g);inBounds(g);assert.equal(g.pitch.angle,0);
+  const p=g.point({x:10,z:12}),back=g.ground(p.x,p.y);assert.ok(Math.abs(back.x-10)<1e-6&&Math.abs(back.z-12)<1e-6);
+  const old=g.camera;g.auto.match.ball.z=40;g.drawAuto(1);assert.ok(g.camera>=old);assert.equal(g.actors.filter(a=>a.isVisible).length,10);
+ }
+});
+test('drag a token directly onto a player or the pitch; invalid drops cost nothing',async()=>{
  for(const opts of [{},{width:960,height:2000,left:130,top:-600,cssScale:.375}]){
-  const g=new Sunday(runtime(opts));click(g,'START GAME');await g.autoChoose(g.auto.offers[0]);
-  for(const b of g.buttons)assert.ok(b.x>=g.v.left&&b.x+b.w<=g.v.right&&b.y>=g.v.top&&b.y+b.h<=g.v.bottom);
-  assert.ok(g.actors.slice(0,22).every(a=>Number.isFinite(a.x)&&Number.isFinite(a.y)&&a.isVisible));
-  assert.ok(!g.ring.isVisible);
+  const g=new Sunday(runtime(opts));await start(g);openPlay(g);
+  const m=g.auto.match,p=m.actors.find(a=>a.side===0&&a.role==='CF'&&a.visible);g.camera=p.z;g.drawAuto(0);
+  const e=grab(g,'giant'),t=m.time;g.advanceAuto(1);assert.equal(m.time,t);g.pointerUp(e);assert.equal(g.auto.armed,null);assert.equal(m.mutations.used.length,0);
+  grab(g,'giant');const a=g.point(p);release(g,a.x,a.y);assert.equal(g.auto.armed,null);assert.ok(m.mutations.used.includes('giant'));assert.equal(m.actors.find(x=>x.id===p.id).size,3);
+  grab(g,'squeeze');release(g,g.cx,g.layout.play.y+g.layout.play.h/2);assert.ok(m.mutations.squeeze);assert.ok(m.mutations.active.length===2);
+  grab(g,'sinkhole');release(g,g.cx,g.v.top);assert.ok(!m.mutations.used.includes('sinkhole'));assert.equal(g.auto.armed,null);
+  grab(g,'sinkhole');g.runtime.handlers.get('pointercancel')({pointerId:1});assert.equal(g.auto.armed,null);assert.equal(g.drag,null);
+  grab(g,'sinkhole');g.pointerUp(event(g,g.cx,g.v.top,2));assert.equal(g.auto.armed,'sinkhole');g.key({key:'Escape'});assert.equal(g.auto.armed,null);
+  grab(g,'sinkhole');const point=g.point({x:0,z:Math.max(-30,Math.min(30,g.camera))});release(g,point.x,point.y);assert.ok(m.mutations.used.includes('sinkhole'));
  }
 });
-
-test('cancelled asynchronous match creation cannot overwrite a different career',async()=>{
- const g=new Sunday(runtime());g.startAuto();const first=g.auto;const pending=g.autoChoose(first.offers[0]);assert.equal(first.phase,'loading');
- g.exitAuto();g.startAuto();const second=g.auto;await pending;assert.equal(g.auto,second);assert.equal(second.phase,'draft');assert.equal(second.match,null);
+test('half-time and full-time use screen taps, not menu buttons',async()=>{
+ const g=new Sunday(runtime({width:960,height:540,cssScale:.65}));await start(g);
+ g.auto.speed=4;
+ for(let i=0;i<200&&g.auto.phase==='match';i++)g.advanceAuto(1);
+ assert.equal(g.auto.phase,'halftime');const t=g.auto.match.time;g.advanceAuto(100);assert.equal(g.auto.match.time,t);assert.equal(g.tokens.length,0);tap(g,480,270);
+ for(let i=0;i<200&&g.auto.phase==='match';i++)g.advanceAuto(1);
+ assert.equal(g.auto.phase,'result');assert.ok(g.auto.match.finished);assert.equal(g.tokens.length,0);g.key({key:'Escape'});assert.equal(g.auto,null);
 });
-
-
-test('chip cards work from the live HUD and half-time is a mandatory reward break',async()=>{
- const g=new Sunday(runtime({width:960,height:2000,left:130,top:-600,cssScale:.375}));g.startAuto();g.auto.offers=['nitro'];await g.autoChoose('nitro');const m=g.auto.match;
- for(let i=0;i<500&&m.phase!=='play';i++)g.advanceAuto(.05);
- assert.equal(m.phase,'play');const before=m.playerAttributes();click(g,'NITRO');assert.equal(m.chips[0].status,'active');assert.equal(m.chipStats.used,1);
- assert.ok(m.playerAttributes().some((p,i)=>p.team==='A'&&p.role!=='GK'&&p.speed>before[i].speed));
- click(g,'4×');for(let i=0;i<60&&g.auto.phase==='match';i++)g.advanceAuto(1);
- assert.equal(g.auto.phase,'halftime');assert.equal(m.phase,'halftime');assert.equal(m.chips[0].status,'spent');
- const score=[...m.score],time=m.time;g.advanceAuto(100);assert.equal(m.time,time);assert.deepEqual(m.score,score);
- for(const b of g.buttons)assert.ok(b.x>=g.v.left&&b.y>=g.v.top&&b.x+b.w<=g.v.right&&b.y+b.h<=g.v.bottom);
- g.resumeHalf(g.auto.offers[0]);assert.equal(g.auto.chips.length,2);assert.equal(m.chips.length,2);assert.equal(g.auto.phase,'match');
+test('cancelled asynchronous native match cannot overwrite a newer match',async()=>{
+ const g=new Sunday(runtime());const first=g.startAuto(12345),old=g.auto;g.exitAuto();const second=g.startAuto(728),current=g.auto;await first;await second;
+ assert.notEqual(old,current);assert.equal(g.auto,current);assert.equal(g.auto.seed,728);assert.equal(g.auto.phase,'match');
 });
