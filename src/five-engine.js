@@ -34,11 +34,11 @@ export function makeMatch(seed=1,deck=DEFAULT,level=0,halfSeconds=HALF){
  function kick(p,x,y,speed,type,cause=null,to=null){if(m.ball.owner!==p.id)return false;let [nx,ny]=norm(x-p.x,y-p.y);if(type==='shot')m.stats[p.team].shots++;else m.stats[p.team].passes++;Object.assign(m.ball,{x:p.x+nx*5,y:p.y+ny*5,vx:nx*speed,vy:ny*speed,owner:null,flight:{team:p.team,from:p.id,to,type,age:0,bounces:0,cause,depth:cause?.depth??0}});p.cool=.5;log(type,p,to!==null?'To '+to:'',cause?.id??null);if(type!=='shot')trigger(p,'pass',cause);return true}
  function pass(p,q,cause=null,bank=false){if(!q)return false;let lead=clamp(d(p,q)/190,.1,.65),x=clamp(q.x+q.vx*lead,10,W-10),y=clamp(q.y+q.vy*lead,10,H-10);if(bank){let top=p.y<H/2,wallY=top?5:H-5;y=2*wallY-y;return kick(p,x,y,215,'bank',cause,q.id)}return kick(p,x,y,175,'pass',cause,q.id)}
  function shoot(p,cause=null){let keeper=m.players[(1-p.team)*5],y=H/2+(keeper.y<H/2?1:-1)*(GOAL-8)+(rand()-.5)*9;return kick(p,p.team?-8:W+8,y,255,'shot',cause)}
- function trigger(p,event,parent=null){let rule=RULES[p.rule];if(!rule||rule.trigger!==event||p.ruleCool>0)return false;let cause={id:m.seq+1,depth:(parent?.depth??0)+1},ok=false; // Reserve cooldown BEFORE nested pass triggers.
+ function trigger(p,event,parent=null){let rule=RULES[p.rule];if(!rule||rule.trigger!==event||p.ruleCool>0)return false;let cause={id:++m.seq,depth:(parent?.depth??0)+1},ok=false; // Reserve cooldown BEFORE nested pass triggers.
  p.ruleCool=1.3;
  switch(p.rule){
  case 'outlet':case 'thief':case 'relay':ok=pass(p,target(p),cause);break;
- case 'runner':p.run=3;ok=true;break;
+ case 'runner':p.run=3;if(m.ball.flight?.from===p.id){m.ball.flight.cause=cause;m.ball.flight.depth=cause.depth}ok=true;break;
  case 'wall':{let q=target(p);if(q&&d(p,q)>35&&Math.abs(p.y-H/2)>35)ok=pass(p,q,cause,true);break}
  case 'poach':if(range(p)<150)ok=shoot(p,cause);break;
  case 'rebound':if(range(p)<175)ok=shoot(p,cause);break;
@@ -48,8 +48,8 @@ export function makeMatch(seed=1,deck=DEFAULT,level=0,halfSeconds=HALF){
  case 'hound':p.press=3;ok=true;break;
  case 'keeper':if(m.ball.owner===null&&Math.abs(m.ball.x-(p.team?W:0))<90){p.press=1.1;ok=true}break;
  }
- if(ok){let e=log('rule',p,rule.name,parent?.id??null);cause.id=e.id;if(!p.team){m.chain=cause.depth;m.best=Math.max(m.best,m.chain);if(cause.depth>1)m.stats[0].combos++;}}else p.ruleCool=0;return ok}
- function receive(p){let f=m.ball.flight;Object.assign(m.ball,{owner:p.id,vx:0,vy:0,flight:null});p.cool=.28;let event='receive';if(f){if(f.team===p.team&&f.from!==p.id&&f.type!=='shot'){m.stats[p.team].completed++;if(f.bounces)m.stats[p.team].banks++}else if(f.team!==p.team){if(f.type==='shot'&&p.role===0){m.stats[p.team].saves++;event='save'}else{m.stats[p.team].tackles++;event='win'}}if(f.type==='shot'&&p.role!==0)event='rebound';log(event,p,'',f.cause?.id??null)}trigger(p,event,f?.team===p.team?f.cause:null)}
+ if(ok){m.events.push({id:cause.id,time:m.time,kind:'rule',team:p.team,player:p.id,detail:rule.name,link:parent?.id??null});if(m.events.length>200)m.events.shift();if(!p.team){m.chain=cause.depth;m.best=Math.max(m.best,m.chain);if(cause.depth>1)m.stats[0].combos++;}}else p.ruleCool=0;return ok}
+ function receive(p){let f=m.ball.flight;Object.assign(m.ball,{owner:p.id,vx:0,vy:0,flight:null});p.cool=.28;let event='receive';if(f){if(f.team===p.team&&f.from!==p.id&&f.type!=='shot'){m.stats[p.team].completed++;if(f.bounces)m.stats[p.team].banks++}else if(f.team!==p.team){if(f.type==='shot'&&p.role===0){m.stats[p.team].saves++;event='save'}else{m.stats[p.team].tackles++;event='win'}}if(f.type==='shot'&&p.role!==0&&f.team===p.team)event='rebound';log(event,p,'',f.cause?.id??null)}trigger(p,event,f?.team===p.team?f.cause:null)}
  function goal(t){m.score[t]++;m.stats[t].goals++;log('goal',{team:t},m.score.join('–'),m.ball.flight?.cause?.id??null);kickoff(1-t)}
  function command(id){if(m.phase!=='play'||m.tokens<=0||m.call)return false;if(!['left','right','hunt','reset'].includes(id))return false;m.tokens--;m.call={id,until:m.time+6};log('call',{team:0},id);return true}
  function move(p,dt){let b=m.ball,o=m.players[b.owner],sgn=dir(p),[hx,hy]=formations[p.role];if(p.team)hx=W-hx;let attack=o?.team===p.team,closest=m.players.filter(q=>q.team===p.team&&q.role!==0).sort((a,b)=>d(a,m.ball)-d(b,m.ball))[0];let x=hx,y=hy;
@@ -69,6 +69,7 @@ export function makeMatch(seed=1,deck=DEFAULT,level=0,halfSeconds=HALF){
  let candidates=m.players.filter(p=>p.cool===0&&d(p,b)<(p.role===0?11:7)&&!(f?.from===p.id&&f.age<.45));
  if(candidates.length)receive(candidates.sort((p,q)=>d(p,m.ball)-d(q,m.ball))[0]);
  }
+ function substitute(slot,rule){if(m.phase!=='play'||m.subUsed||slot<0||slot>4||!RULES[rule])return false;m.subUsed=true;m.deck[slot]=rule;let p=m.players[slot];p.rule=rule;p.energy=1;p.ruleCool=0;log('sub',p,RULES[rule].name);return true}
  function resume(deck=m.deck){if(m.phase!=='half')return false;m.deck=[...deck];m.half=2;m.phase='play';m.tokens=3;m.call=null;kickoff(1);return true}
- return Object.assign(m,{step,resume,command,debug:{kick,trigger,receive,goal,target}});
+ return Object.assign(m,{step,resume,command,substitute,debug:{kick,trigger,receive,goal,target}});
 }
