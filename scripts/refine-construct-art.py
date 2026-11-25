@@ -140,7 +140,7 @@ def build_directional_atlas(data):
     atlas.save(WEB/path)
     for anim in exported[7]:
         for frame in anim[7]:frame[1]=(WEB/path).stat().st_size
-    source.write_text(json.dumps(project,indent=2)+'\\n')
+    source.write_text(json.dumps(project,indent=2)+'\n')
     print('Built 192 original directional footballer frames in the native project and export.')
 def pitch():
     p=Canvas(528,660,'304b32');rng=random.Random(1926)
