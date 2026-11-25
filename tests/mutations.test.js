@@ -49,8 +49,9 @@ test('pinball resolves swept high-speed impacts and clamps energy',()=>{
 });
 async function live(seed=12345,adaptiveOpponent=false){
  const m=await createSoccerMatch(seed,[],0,90,5,'intent',['diamond','diamond'],{mutations:true,testHooks:true,adaptiveOpponent});
- for(let i=0;i<400&&m.phase!=='play';i++)m.step();
- assert.equal(m.phase,'play');return m;
+ const sim=m.mutationTest.sim;
+ for(let i=0;i<800&&(m.phase!=='play'||sim.setPieceType);i++)m.step();
+ assert.equal(m.phase,'play');assert.ok(!sim.setPieceType,'kickoff must actually be released');return m;
 }
 test('native movement and shot speed respond to player powers, then restore',async()=>{
  const m=await live();const {sim,controller,computeShootKick}=m.mutationTest;
