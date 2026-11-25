@@ -32,6 +32,24 @@ playerText=playerText.replace('function getPassReceiverPosition(teammate, carrie
         return {x: teammate.x * .75 + target.x * .25, y: teammate.y * .75 + target.y * .25};
     }`);
 playerText=playerText.replace('const forwardStep = Utils.scaleFieldX(inAttackingHalf ? 12.5 : 7.8125)', `const forwardStep = Utils.scaleFieldX(Settings.SUNDAY_ATTACK ? (inAttackingHalf ? 15 : 13) : (inAttackingHalf ? 12.5 : 7.8125))`);
+// Report actual contact outcomes, not AI intentions. The short settling
+// window is only for the new profile and only after a clean received pass.
+playerText=playerText.replace('const touch = applyFirstTouch(player, ball, { forceClean: ownPass });', `const incomingSpeed = Math.hypot(ball.vx || 0, ball.vy || 0);
+    const receivedPass = !ownPass && ball.passFromX != null && ball.lastKicker && ball.lastKicker.team === player.team;
+    const touch = applyFirstTouch(player, ball, { forceClean: ownPass });
+    if (player.level?._telemetry?.onFirstTouch && !touch.skipped) {
+        player.level._telemetry.onFirstTouch({ player, fumbled: touch.fumbled, control: touch.control, incomingSpeed, receivedPass: !!receivedPass });
+    }
+    if (Settings.SUNDAY_ZONES && receivedPass && !touch.fumbled) player.sundayTouchGrace = .10;`);
+playerText=playerText.replace('if (isGkProtected(owner)) return false;', 'if (isGkProtected(owner)) return false;\\n    if (Settings.SUNDAY_ZONES && owner.sundayTouchGrace > 0) return false;');
+// Let the team-local first-touch settings actually apply on the new profile.
+const touchFile='kernel/core/lib/first_touch.js';
+let touchText=git('show','HEAD:'+touchFile);
+touchText=touchText.replace('function aiNum(key, fallback) {', 'function aiNum(key, fallback, player) {\\n    if (Settings.SUNDAY_ZONES && player?.team && typeof Settings.AI?.[player.team]?.[key] === "number") return Settings.AI[player.team][key];');
+touchText=touchText.replace('function computeFumbleChance(control, ballSpeed) {','function computeFumbleChance(control, ballSpeed, player) {');
+touchText=touchText.replace(/aiNum\(('FIRST_TOUCH_[A-Z_]+'), ([A-Z_]+)\)/g, 'aiNum($1, $2, player)');
+touchText=touchText.replace('computeFumbleChance(control, speed);','computeFumbleChance(control, speed, player);');
+writeFileSync(resolve(upstream,touchFile),touchText+'\n');
 writeFileSync(resolve(upstream,playerPath),playerText+'\n');
 // Opt-in compact-pitch decision changes; original profiles retain exact upstream logic.
 const teamFile='kernel/core/entities/team.js';
@@ -119,6 +137,11 @@ outfield=patch(outfield,'if (distToGoal < getShootRange(p)', `if (Settings.SUNDA
                 if (distToGoal < getShootRange(p)`);
 outfield=patch(outfield,'const tryShoot = willingness >= 1 || Math.random() < willingness;', 'const tryShoot = (Settings.SUNDAY_ATTACK && p.passLinkCooldown > 0 && p.lastPassFrom && distToGoal < field.width * .30) || willingness >= 1 || Math.random() < willingness;');
 outfield=patch(outfield,'const passChance = computeDribblePassChance(p, threat);','const passChance = Settings.SUNDAY_ATTACK ? Math.max(computeDribblePassChance(p, threat), threat.threatened ? .68 : .26) : computeDribblePassChance(p, threat);');
+// Use the native slide FSM, but record every launch (including misses)
+// separately from the actual tackle contact roll.
+outfield=patch(outfield,'p.isSliding = true;\\n                        p.slideTimer = 0.65;', `p.isSliding = true;
+                        p.slideTimer = 0.65;
+                        p.level?._telemetry?.onSlideStarted?.({player:p});`);
 writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
 // The pass predictor and actual kick share this function. Crisp ground
 // passes on the compact pitch must use the same speed in both places.
