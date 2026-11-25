@@ -62,7 +62,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  if(express)for(const team of [baseHome,away])Object.assign(team,{PASS_AGGRESSION:.86,ATTACK_SUPPORT_INTENSITY:.9,ATTACK_SUPPORT_FORM_PULL:.64,ATTACK_SUPPORT_OWN_HALF_BLEND:.72,THROUGH_BALL_LEAD_EXTRA:1.8,SHORT_PASS_MAX_DIST:24,LONG_PASS_MIN_DIST:23,LONG_PASS_MAX_DIST:44,SHOOT_RANGE_REF:39,SHOOT_FORCE_BLOCKED_CHANCE:.07,SHOOT_CONTESTED_CHANCE:.38,SHOOT_SPEED_BASE:23,SHOOT_ANGLE_NOISE_SCALE:.0035,GK_SHOT_SAVE_MULT:.38,GK_DIVE_CHANCE_SHOT:.65,FIRST_TOUCH_FUMBLE_BASE:.015,FIRST_TOUCH_FUMBLE_SCALE:.19});
  if(shape)for(const team of [baseHome,away])Object.assign(team,{FORMATION_HOLD:.72,ATTACK_SUPPORT_INTENSITY:.66,DEFENSIVE_PRESS_INTENSITY:.42,PASS_AGGRESSION:.65,SHOOT_RANGE_REF:32,SHOOT_FORCE_BLOCKED_CHANCE:0,COUNTERPRESS_MAX_SURGE:1,FIRST_TOUCH_FUMBLE_BASE:.005,FIRST_TOUCH_FUMBLE_SCALE:.12});
  if(attack)for(const team of [baseHome,away])Object.assign(team,{PASS_AGGRESSION:.76,SHOOT_RANGE_REF:37,SHOOT_FORCE_BLOCKED_CHANCE:.025,SHOOT_CONTESTED_CHANCE:.36,SHORT_PASS_MAX_DIST:28,LONG_PASS_MAX_DIST:52,THROUGH_BALL_LEAD_EXTRA:2.0});
- if(zones)for(const team of [baseHome,away])Object.assign(team,{TACKLE_ATTEMPT_COOLDOWN:.75});
+ if(zones)for(const team of [baseHome,away])Object.assign(team,{TACKLE_ATTEMPT_COOLDOWN:.75,FIRST_TOUCH_MIN_SPEED:4.5,FIRST_TOUCH_FUMBLE_BASE:.015,FIRST_TOUCH_FUMBLE_SCALE:.19,FIRST_TOUCH_CLAIM_LOCK:.22,FIRST_TOUCH_RESIDUAL_MIN:.25,FIRST_TOUCH_RESIDUAL_MAX:.48});
  let home=baseHome;
  Settings.HEADLESS=true;Settings.soundsMuted=true;Settings.TIME_SPEED=1;
  Settings.FIELD_SIZE_MULTIPLIER=format===5?.60:1;
@@ -76,7 +76,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  if(format===5)sim.teamStatsPreset={};
  if(express){const stats=(o)=>({...statsPreset.default_stats,...o});const squad=[stats({goalkeeping:67,speed:63,passing:78}),stats({speed:66,tackling:76,passing:80}),stats({speed:84,dribbling:84,passing:85,shooting:76}),stats({speed:80,dribbling:79,passing:87,shooting:78}),stats({speed:76,shooting:90,accuracy:88,dribbling:80})];sim.teamStatsPreset={England:squad,Scotland:squad};}
  await sim.start();sim.active=true;
- const field=Utils.getFieldBounds(),events=[],stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackleAttempts:0,tackles:0,interceptions:0,saves:0,blocks:0,possession:0,bestChain:0,progressive:0}));
+ const field=Utils.getFieldBounds(),events=[],stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackleAttempts:0,tackles:0,slideStarts:0,slideAttempts:0,slideWins:0,firstTouches:0,cleanTouches:0,passTouches:0,cleanPassTouches:0,touchControlSum:0,interceptions:0,saves:0,blocks:0,possession:0,bestChain:0,progressive:0}));
  let lastCompleted=null,lastThirdSide=null;
  let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
  const originals=new Map();
@@ -238,14 +238,16 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  for(const p of sim.players)if(p.team==='A')remember(p);
  function event(text,team,kind='play'){events.unshift({time:state.time,text,side:team==='A'||team==='B'?side(team):-1,kind});if(events.length>8)events.pop();}
  sim._telemetry={
-  onTackleAttempt({tackler,success}){if(!tackler)return;const a=stats[side(tackler.team)];a.tackleAttempts++;if(success){a.tackles++;if(tackler.team==='A')gainCharge();event('BALL WON',tackler.team,'tackle');}},
+  onTackleAttempt({tackler,success,tackleType}){if(!tackler)return;const a=stats[side(tackler.team)];a.tackleAttempts++;if(tackleType==='slide'){a.slideAttempts++;if(success)a.slideWins++;}if(success){a.tackles++;if(tackler.team==='A')gainCharge();event(tackleType==='slide'?'SLIDING TACKLE WON':'BALL WON',tackler.team,'tackle');}},
+   onSlideStarted({player}){stats[side(player.team)].slideStarts++;event('SLIDING TACKLE',player.team,'tackle');},
+   onFirstTouch({player,fumbled,control,receivedPass}){const a=stats[side(player.team)];a.firstTouches++;a.touchControlSum+=control;if(!fumbled)a.cleanTouches++;if(receivedPass){a.passTouches++;if(!fumbled)a.cleanPassTouches++;}if(fumbled)event('HEAVY TOUCH',player.team,'play');},
   onShotKicked({team}){flow.shots++;if(lastCompleted&&lastCompleted.to.team===team&&frames-lastCompleted.frame<80)flow.createdShots++;const p=sim.ball.owner||sim.ball.lastKicker;if(p){const right=sim.isSecondHalf()?team==='B':team==='A',dist=Math.abs(p.x-(right?field.width:0))/field.width;flow.shotZones[Math.min(2,Math.floor(dist*3))]++;}stats[side(team)].shots++;event('SHOT!',team,'shot');rocketKick=team==='A'&&state.chips.some(c=>c.id==='rocket'&&c.status==='active');},
   onProgressivePass({team}){stats[side(team)].progressive++;},
   onBlock(info){if(info?.team==='A'||info?.team==='B')stats[side(info.team)].blocks++;event('SHOT BLOCKED',info?.team,'save');}
  };
  function point(p){return {x:(p.y/field.height-.5)*68,z:(.5-p.x/field.width)*94};}
  function snapshot(){
-  state.actors=sim.players.map((p,i)=>({id:i,...point(p),team:p.role==='GK'?2:side(p.team),side:side(p.team),role:p.role,assignment:zones?p.sundayAssignment||null:null,visible:!p.isSentOff,frame:Math.floor(frames/3)%2}));
+  state.actors=sim.players.map((p,i)=>({id:i,...point(p),team:p.role==='GK'?2:side(p.team),side:side(p.team),role:p.role,assignment:zones?p.sundayAssignment||null:null,visible:!p.isSentOff,sliding:!!p.isSliding,frame:Math.floor(frames/3)%2}));
   state.ball={...point(sim.ball),y:Math.max(0,sim.ball.z||0)+.4};
   state.score=[sim.scoreA,sim.scoreB];state.time=clamp(sim.matchTimer/5400*duration,0,duration);
   state.matchSeconds=clamp(sim.matchTimer,0,5400);state.half=sim.isSecondHalf()?2:1;state.phase=sim.matchState;state.finished=state.phase==='fulltime';
@@ -255,7 +257,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   if(arcade&&sim.ball){sim.ball.offsideReceiver=null;sim.ball.offsideLineX=null;}
   // Reapply team-local knobs before the tick; upstream owns every decision.
   Settings.AI.A=home;Settings.AI.B=away;Time.deltaTime=SOCCER_STEP;
-  for(const p of sim.players)if(p.team==='A'&&!originals.has(p))applyPlayer(p);
+  for(const p of sim.players){if(p.team==='A'&&!originals.has(p))applyPlayer(p);if(p.sundayTouchGrace>0)p.sundayTouchGrace=Math.max(0,p.sundayTouchGrace-SOCCER_STEP);}
   const before=sim.ball.owner,beforeShot=sim.ball.isShot,phaseBefore=sim.matchState,shotBefore=flow.shots;sim.updateAll();frames++;
   if(arcade&&sim.matchState!==phaseBefore){const limits={kickoff:1,goal:2,halftime:2.5,freekick:1.1,penalty:1.3,card:1.2};const limit=limits[sim.matchState];if(limit!=null&&sim.stateTimer>limit)sim.stateTimer=limit;}
   snapshot();rocketKick=false;
