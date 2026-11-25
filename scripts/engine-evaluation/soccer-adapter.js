@@ -50,17 +50,19 @@ function teamSettings(traits){
  }
  return out;
 }
-export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75){
+export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,format=11){
  // Soccer-JS uses shared Settings; this proof runs one active match at a time.
  const baseHome=teamSettings(traits),away=teamSettings([['shield'],['hunt','touch'],['overlap','rifle']][Math.min(2,Math.max(0,opponent))]);
  let home=baseHome;
  Settings.HEADLESS=true;Settings.soundsMuted=true;Settings.TIME_SPEED=1;
+ Settings.FIELD_SIZE_MULTIPLIER=format===5?.60:1;
  Settings.MATCH_DURATION=duration;Settings.AI.A=home;Settings.AI.B=away;Settings.AI.dynamicStrategyShifting=false;
- Settings.batchConfig={teamA:'England',teamB:'Scotland',formationA:'4-4-2',formationB:'4-3-3'};
+ Settings.batchConfig={teamA:'England',teamB:'Scotland',formationA:format===5?'SUNDAY-5':'4-4-2',formationB:format===5?'SUNDAY-5':'4-3-3'};
  Settings.app={camX:0,camY:0,canvas:{width:720,height:528}};
  const sim=new Simulator({seed:seed>>>0||1});
  // Seed the preset fields directly; bootstrapMatch.loadPresets returns early.
- sim.defaultStats=statsPreset.default_stats;sim.teamStatsPreset=statsPreset.teams;sim.formationsPreset=formations;
+ sim.defaultStats=statsPreset.default_stats;sim.teamStatsPreset=statsPreset.teams;sim.formationsPreset=format===5?{...formations,'SUNDAY-5':[{role:'GK',x:5,y:50},{role:'CB',x:24,y:50},{role:'LM',x:40,y:22},{role:'RM',x:40,y:78},{role:'CF',x:59,y:50}]}:formations;
+ if(format===5)sim.teamStatsPreset={};
  await sim.start();sim.active=true;
  const field=Utils.getFieldBounds(),events=[],stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackles:0,interceptions:0,saves:0,blocks:0,possession:0,bestChain:0,progressive:0}));
  let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
@@ -163,5 +165,5 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75){
   const phase=sim.matchState;
   if(phase!==lastState){if(['corner','goalkick','throwin','freekick','offside','penalty','halftime','fulltime','kickoff'].includes(phase)){event(phase.toUpperCase(),sim.setPieceKickingTeam,'match');pending=null;lastLaunch=null;chain=0;chainSide=-1;breakCombo();}lastState=phase;}
  }
- snapshot();event('KICK OFF',null,'match');return state;
+ snapshot();state.format=format;if(format===5&&state.actors.length!==10)throw Error('Expected exactly ten players, got '+state.actors.length);event('KICK OFF',null,'match');return state;
 }
