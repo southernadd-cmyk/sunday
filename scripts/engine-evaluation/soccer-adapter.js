@@ -128,7 +128,19 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
     if(p.role==='CB'){x=clamp(bx-field.width*.23,field.width*.12,field.width*.57);y=wide*.5+(by-wide*.5)*.30;}
     else if(p.role==='CF'){x=clamp(bx+field.width*(attacking?.22:.12),field.width*.40,field.width*.88);y=wide*.5+(by-wide*.5)*.20;}
     else {const left=p.role==='LM';x=clamp(bx+field.width*(attacking?.065:-.13),field.width*.22,field.width*.78);y=wide*(left?.20:.80)+(by-wide*.5)*.15;}
-    if(attack&&attacking&&ball.owner&&ball.owner!==p){const carrier=ball.owner,farSide=(by<wide*.5)!==(p.role==='LM');if(p.role==='CF'){x=clamp(bx+field.width*.22,field.width*.48,field.width*.91);y=wide*(by<wide*.5?.57:.43);}else if(p.role==='LM'||p.role==='RM'){if(farSide){x=clamp(bx+field.width*.18,field.width*.40,field.width*.86);y=wide*(p.role==='LM'?.30:.70);}else{x=clamp(bx-field.width*.055,field.width*.22,field.width*.82);}}}
+    if(attack&&attacking&&ball.owner&&ball.owner!==p){
+     const farSide=(by<wide*.5)!==(p.role==='LM');
+     // Stagger the two forward outlets in midfield: the near wing offers
+     // a short progressive triangle, while the far wing attacks behind.
+     // In the final third retain the near-side cutback outlet.
+     if(p.role==='CF'){
+      x=clamp(bx+field.width*.24,field.width*.48,field.width*.91);
+      y=wide*(by<wide*.5?.57:.43);
+     }else if(p.role==='LM'||p.role==='RM'){
+      if(farSide){x=clamp(bx+field.width*.21,field.width*.40,field.width*.87);y=wide*(p.role==='LM'?.30:.70);}
+      else{x=clamp(bx+field.width*(depth<.67?.075:-.055),field.width*.22,field.width*.82);}
+     }
+    }
     // A supporting teammate in the carrier's lane offers a diagonal instead.
     if(ball.owner?.team===p.team&&Math.hypot(x-bx,y-by)<field.width*.13){x=clamp(x+(p.role==='CB'?-1:1)*field.width*.12,field.width*.10,field.width*.90);}
     return {x:right?x:field.width-x,y:right?y:field.height-y};
