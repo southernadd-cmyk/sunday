@@ -25,6 +25,18 @@ const playerPath='kernel/core/entities/player.js';
 const playerOriginal=git('show','HEAD:'+playerPath);
 if(!playerOriginal.includes('if (ball.offsideReceiver) {'))throw Error('Upstream offside claim changed');
 writeFileSync(resolve(upstream,playerPath),playerOriginal.replace('if (ball.offsideReceiver) {','if (!Settings.SUNDAY_NO_OFFSIDE && ball.offsideReceiver) {')+'\n');
+// Opt-in compact-pitch decision changes; original profiles retain exact upstream logic.
+const teamFile='kernel/core/entities/team.js';
+let teamText=readFileSync(resolve(upstream,teamFile),'utf8');
+function patch(src,from,to){if(!src.includes(from))throw Error('Missing pinned upstream patch: '+from);return src.replace(from,to);}
+teamText=patch(teamText,'if (!isPassReceiverAhead(passer, teammate, passer.level)) continue;', 'if (!Settings.SUNDAY_EXPRESS && !isPassReceiverAhead(passer, teammate, passer.level)) continue;');
+teamText=patch(teamText,'if (bestShortScore > shortBar) return bestShort;', 'if (bestShortScore > shortBar) return bestShort;\\n        if (Settings.SUNDAY_EXPRESS && bestShort && bestShortScore > 0) return bestShort;'.replace('\\n','\n'));
+teamText=patch(teamText,'if (bestLongScore > longBar) return bestLong;', 'if (Settings.SUNDAY_EXPRESS && bestShortScore > shortBar && bestShortScore >= bestLongScore - 1) return bestShort;\\n        if (bestLongScore > longBar) return bestLong;'.replace('\\n','\n'));
+writeFileSync(resolve(upstream,teamFile),teamText);
+const outfieldFile='kernel/core/entities/player_states_outfield.js';
+let outfield=git('show','HEAD:'+outfieldFile);
+outfield=patch(outfield,'target.passLinkCooldown = 1.4 + Math.random() * 0.6;', 'target.passLinkCooldown = Settings.SUNDAY_EXPRESS ? 0.35 + Math.random() * 0.2 : 1.4 + Math.random() * 0.6;');
+writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
 const license=readFileSync(resolve(upstream,'LICENSE'),'utf8');
