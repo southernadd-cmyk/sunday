@@ -29,7 +29,7 @@ export function createMutations({sim,field,dt,event,resetPlayer}){
   const def=MUTATIONS[id];if(!def||used.has(id)||sim.matchState!=='play'||sim.setPieceType||drop)return false;
   const e={id,until:tick+Math.round(10/dt)};
   if(def.target==='player'){
-   const p=sim.players[target];if(!p||p.team!=='A'||p.role==='GK'||p.isSentOff)return false;e.player=p;
+   if(!Number.isInteger(target))return false;const p=sim.players[target];if(!p||p.team!=='A'||p.role==='GK'||p.isSentOff)return false;e.player=p;
   }else if(def.target==='pitch'){
    if(!target||!Number.isFinite(target.x)||!Number.isFinite(target.y))return false;
    const {lo,hi}=limits(),x=clamp(target.x,8,field.width-8),y=clamp(target.y,lo+4,hi-4);
@@ -41,7 +41,7 @@ export function createMutations({sim,field,dt,event,resetPlayer}){
  function recover(p,f){const pos=safePoint(f.x,f.y);p.isSentOff=false;p.x=pos.x;p.y=pos.y;zero(p);resetPlayer(p);fallen.delete(p);metrics.respawns++;}
  function before(){
   tick++;
-  for(const [id,e] of active)if(tick>e.until){active.delete(id);event(MUTATIONS[id].name+' ENDED','A','mutation');}
+  for(const [id,e] of active)if(tick>=e.until){active.delete(id);event(MUTATIONS[id].name+' ENDED','A','mutation');}
   syncFlags();
   for(const [p,f] of fallen)if(tick>=f.until||sim.matchState!=='play')recover(p,f);
   if(drop){
@@ -60,7 +60,7 @@ export function createMutations({sim,field,dt,event,resetPlayer}){
   if(dist(p,h)>h.r+.12)return;
   if(h.kind==='hole'){if(b.z<.55)enterHole(h);return;}
   let nx=p.x-h.x,ny=p.y-h.y,d=Math.hypot(nx,ny);
-  if(d<.01){nx=-b.vx;ny=-b.vy;d=Math.hypot(nx,ny)||1;}nx/=d;ny/=d;
+  if(d<.01){nx=-b.vx;ny=-b.vy;d=Math.hypot(nx,ny);if(d<.01){nx=0;ny=1;d=1;}}nx/=d;ny/=d;
   const dot=b.vx*nx+b.vy*ny;if(dot>=0&&dist(b,h)>h.r)return;
   b.x=h.x+nx*(h.r+.15);b.y=h.y+ny*(h.r+.15);
   if(dot<0){b.vx=(b.vx-2*dot*nx)*1.08;b.vy=(b.vy-2*dot*ny)*1.08;const speed=Math.hypot(b.vx,b.vy);if(speed>65){b.vx*=65/speed;b.vy*=65/speed;}metrics.bumperHits++;}
