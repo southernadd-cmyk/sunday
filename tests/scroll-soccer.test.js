@@ -1,0 +1,6 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createSoccerMatch} from '../construct/scripts/engine.js';
+import {project,cameraTarget,advanceCamera,VIEW,WORLD} from '../src/scroll-pitch.js';
+test('camera follows longitudinal action without exposing outside the world',()=>{let a=cameraTarget({x:0,z:-47}),b=cameraTarget({x:0,z:47}),mid=cameraTarget({x:0,z:0});assert.equal(a.y,0);assert.equal(b.y,WORLD.h-VIEW.h);assert.ok(mid.y>a.y&&mid.y<b.y);assert.ok(project(0,-40).y<project(0,40).y);let c=advanceCamera(a,b,.1);assert.ok(c.y>a.y&&c.y<b.y);for(let x of [-100,100]){let c=cameraTarget({x,z:0});assert.ok(c.x>=0&&c.x<=WORLD.w-VIEW.w)}});
+test('five-a-side starts ten real Soccer-JS players and reaches full time',async()=>{let m=await createSoccerMatch(12345,[],0,45,5);assert.equal(m.upstream,'soccer-js');assert.equal(m.actors.length,10);assert.equal(m.actors.filter(p=>p.role==='GK').length,2);for(let i=0;i<20000&&!m.finished;i++){m.step();assert.ok(Number.isFinite(m.ball.x)&&Number.isFinite(m.ball.z));assert.equal(m.actors.length,10)}assert.ok(m.finished,'match did not finish');assert.ok(m.stats[0].completed+m.stats[1].completed>0,'no completed passes');assert.ok(m.stats[0].shots+m.stats[1].shots>0,'no shots')});
