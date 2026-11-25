@@ -23,7 +23,7 @@ function drawMutationHand(){
  for(const [id,button] of Object.entries(buttons)){
   const active=state.active.find(e=>e.id===id),spent=state.used.includes(id);
   button.classList.toggle('active',!!active);button.classList.toggle('armed',armed===id);
-  button.disabled=spent||m.finished||m.phase!=='play'||state.ballHidden;
+  button.disabled=spent||m.finished||!state.canActivate;
   button.querySelector('small').textContent=active?active.seconds.toFixed(1)+'s LEFT':spent?'SPENT':armed===id?'SELECT TARGET':MUTATIONS[id].detail;
  }
  $('view').classList.toggle('targeting',!!armed);
