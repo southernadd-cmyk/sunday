@@ -25,8 +25,9 @@ export function createMutations({sim,field,dt,event,resetPlayer}){
   return choices.find(valid)||{x:field.centerX,y:clamp(field.centerY,lo+1,hi-1)};
  }
  function geometry(){const out=[];for(const [id,e] of active)if(id==='sinkhole'||id==='pinball')out.push(...e.points);return out;}
+ function canActivate(){return sim.matchState==='play'&&!sim.setPieceType&&!drop;}
  function activate(id,target){
-  const def=MUTATIONS[id];if(!def||used.has(id)||sim.matchState!=='play'||sim.setPieceType||drop)return false;
+  const def=MUTATIONS[id];if(!def||used.has(id)||!canActivate())return false;
   const e={id,until:tick+Math.round(10/dt)};
   if(def.target==='player'){
    if(!Number.isInteger(target))return false;const p=sim.players[target];if(!p||p.team!=='A'||p.role==='GK'||p.isSentOff)return false;e.player=p;
@@ -81,6 +82,6 @@ export function createMutations({sim,field,dt,event,resetPlayer}){
    if(!drop&&(b.y<lo||b.y>hi)){if(b.owner)b.owner=null;b.y=clamp(b.y,lo+.03,hi-.03);b.vy=(b.y<field.centerY?1:-1)*Math.abs(b.vy)*.85;metrics.wallHits++;}
   }
  }
- function snapshot(project){return {active:[...active.values()].map(e=>({id:e.id,player:e.player?sim.players.indexOf(e.player):null,seconds:Math.max(0,(e.until-tick)*dt)})),used:[...used],geometry:geometry().map(h=>({...project(h),radius:h.r/field.height*68,depthRadius:h.r/field.width*94,kind:h.kind})),squeeze:active.has('squeeze'),ballHidden:!!drop,fallen:[...fallen.keys()].map(p=>sim.players.indexOf(p)),metrics:{...metrics}};}
+ function snapshot(project){return {canActivate:canActivate(),active:[...active.values()].map(e=>({id:e.id,player:e.player?sim.players.indexOf(e.player):null,seconds:Math.max(0,(e.until-tick)*dt)})),used:[...used],geometry:geometry().map(h=>({...project(h),radius:h.r/field.height*68,depthRadius:h.r/field.width*94,kind:h.kind})),squeeze:active.has('squeeze'),ballHidden:!!drop,fallen:[...fallen.keys()].map(p=>sim.players.indexOf(p)),metrics:{...metrics}};}
  return {activate,before,after,snapshot,metrics,limits,active,fallen,used,recoverAll(){for(const [p,f] of fallen)recover(p,f);},shot(p){if(p?.sundayMutationShot>1)metrics.cannonShots++;}};
 }
