@@ -115,6 +115,7 @@ const simFile='kernel/providers/simulator/simulator.js';
 let simText=readFileSync(resolve(upstream,simFile),'utf8');
 simText=patch(simText,'const chasers = this.getActiveChasers();','const chasers = this.getActiveChasers();');
 simText=patch(simText,"        for (const p of this.players) {\n            if (p.isSentOff) continue;\n            // Manual avatar: state + movement owned by manual_control / human gates","        if (Settings.SUNDAY_SHAPE && this.shapeChasers) {\n            chasers.clear();\n            for (const p of this.shapeChasers()) chasers.add(p);\n        }\n        for (const p of this.players) {\n            if (p.isSentOff) continue;\n            // Manual avatar: state + movement owned by manual_control / human gates");
+simText=patch(simText,'tryBallWallCollisions(this.ball, this.freekickWallPlayers);','if (tryBallWallCollisions(this.ball, this.freekickWallPlayers)) this.sundayOnWallBlock?.();');
 writeFileSync(resolve(upstream,simFile),simText);
 outfield=patch(outfield,'const target = p.supportTarget || p.getIdleMoveTarget();','const target = Settings.SUNDAY_SHAPE ? p.getIdleMoveTarget() : (p.supportTarget || p.getIdleMoveTarget());');
 outfield=patch(outfield,'if (!ball || p.receiveTimer <= 0) {','if (!ball || p.receiveTimer <= 0 || (Settings.SUNDAY_SHAPE && ball.owner && ball.owner !== p)) {');
@@ -155,6 +156,10 @@ outfield=patch(outfield,'const distToGoal = Math.abs(p.x - targetGoalX);', `cons
                     }
                     return;
                 }`);
+outfield=patch(outfield,'const kick = computeShootKick(p);', `const kick = computeShootKick(p);
+                        if (isFreekick && p.humanKick?.kind==='shoot' && p.level.sundayPlanDirectFreeKick) {
+                            ball.x=p.x;ball.y=p.y;ball.z=0;
+                        }`);
 // Use the native slide FSM, but record every launch (including misses)
 // separately from the actual tackle contact roll.
 outfield=patch(outfield,'p.isSliding = true;\n                        p.slideTimer = 0.65;', `p.isSliding = true;
