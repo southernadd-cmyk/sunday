@@ -56,13 +56,14 @@ const FIVE_PROFILE={FORMATION_HOLD:.43,ATTACK_SUPPORT_INTENSITY:.84,ATTACK_SUPPO
 export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,format=11,profile='express'){
  // Soccer-JS uses shared Settings; this proof runs one active match at a time.
  const baseHome=teamSettings(traits),away=teamSettings([['shield'],['hunt','touch'],['overlap','rifle']][Math.min(2,Math.max(0,opponent))]);
- const express=format===5&&profile==='express',arcade=format===5&&profile!=='original';
+ const shape=format===5&&profile==='shape',express=format===5&&(profile==='express'||shape),arcade=format===5&&profile!=='original';
  if(arcade)for(const team of [baseHome,away])for(const [k,v] of Object.entries(FIVE_PROFILE)){if(typeof upstreamDefaults[k]!=='number')throw Error('Missing five-a-side setting '+k);team[k]=v;}
  if(express)for(const team of [baseHome,away])Object.assign(team,{PASS_AGGRESSION:.86,ATTACK_SUPPORT_INTENSITY:.9,ATTACK_SUPPORT_FORM_PULL:.64,ATTACK_SUPPORT_OWN_HALF_BLEND:.72,THROUGH_BALL_LEAD_EXTRA:1.8,SHORT_PASS_MAX_DIST:24,LONG_PASS_MIN_DIST:23,LONG_PASS_MAX_DIST:44,SHOOT_RANGE_REF:39,SHOOT_FORCE_BLOCKED_CHANCE:.07,SHOOT_CONTESTED_CHANCE:.38,SHOOT_SPEED_BASE:23,SHOOT_ANGLE_NOISE_SCALE:.0035,GK_SHOT_SAVE_MULT:.38,GK_DIVE_CHANCE_SHOT:.65,FIRST_TOUCH_FUMBLE_BASE:.015,FIRST_TOUCH_FUMBLE_SCALE:.19});
+ if(shape)for(const team of [baseHome,away])Object.assign(team,{FORMATION_HOLD:.72,ATTACK_SUPPORT_INTENSITY:.66,DEFENSIVE_PRESS_INTENSITY:.42,PASS_AGGRESSION:.65,SHOOT_RANGE_REF:32,SHOOT_FORCE_BLOCKED_CHANCE:0,COUNTERPRESS_MAX_SURGE:1,FIRST_TOUCH_FUMBLE_BASE:.005,FIRST_TOUCH_FUMBLE_SCALE:.12});
  let home=baseHome;
  Settings.HEADLESS=true;Settings.soundsMuted=true;Settings.TIME_SPEED=1;
  Settings.FIELD_SIZE_MULTIPLIER=format===5?.60:1;
- Settings.SUNDAY_NO_OFFSIDE=arcade;Settings.SUNDAY_EXPRESS=express;
+ Settings.SUNDAY_NO_OFFSIDE=arcade;Settings.SUNDAY_EXPRESS=express;Settings.SUNDAY_SHAPE=shape;
  Settings.MATCH_DURATION=duration;Settings.AI.A=home;Settings.AI.B=away;Settings.AI.dynamicStrategyShifting=false;
  Settings.batchConfig={teamA:'England',teamB:'Scotland',formationA:format===5?'SUNDAY-5':'4-4-2',formationB:format===5?'SUNDAY-5':'4-3-3'};
  Settings.app={camX:0,camY:0,canvas:{width:720,height:528}};
@@ -76,8 +77,8 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  let lastCompleted=null;
  let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
  const originals=new Map();
- const flow={returnPasses:0,shotZones:[0,0,0],playTicks:0,deadTicks:0,boardBounces:0,turnovers:0,shots:0,goals:0,longestQuiet:0,quiet:0,phases:{}};
- const state={flow,profile:express?'express':arcade?'arcade':'original',duration,time:0,finished:false,phase:'kickoff',actors:[],ball:{x:0,z:0,y:0},score:[0,0],stats,events,step,upstream:'soccer-js',stepSeconds:SOCCER_STEP,chips:[],charge:0,chipRevision:0,grantChip,useChip,canUseChip,chipStats:{shotsPowered:0,combos:0,used:0,reloads:0},playerAttributes:()=>sim.players.map(p=>({team:p.team,role:p.role,...p.stats,currentStamina:p.currentStamina}))};
+ const flow={crowdedTicks:0,shapeTicks:0,spreadSum:0,ownedTicks:0,threePassChains:0,returnPasses:0,shotZones:[0,0,0],playTicks:0,deadTicks:0,boardBounces:0,turnovers:0,shots:0,goals:0,longestQuiet:0,quiet:0,phases:{}};
+ const state={flow,profile:shape?'shape':express?'express':arcade?'arcade':'original',duration,time:0,finished:false,phase:'kickoff',actors:[],ball:{x:0,z:0,y:0},score:[0,0],stats,events,step,upstream:'soccer-js',stepSeconds:SOCCER_STEP,chips:[],charge:0,chipRevision:0,grantChip,useChip,canUseChip,chipStats:{shotsPowered:0,combos:0,used:0,reloads:0},playerAttributes:()=>sim.players.map(p=>({team:p.team,role:p.role,...p.stats,currentStamina:p.currentStamina}))};
  // Let the original goal geometry decide whether a shot really crosses the line.
  // Only non-scoring exits reflect; no invented goals, teleports, or new AI.
  if(arcade){
@@ -88,13 +89,49 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
     const {left,right}=this.getGoals();
     if(!left.isGoalEvent(ball)&&!right.isGoalEvent(ball)){
      let hit=false;
-     if(ball.y<0||ball.y>field.height){ball.y=clamp(ball.y,.04,field.height-.04);ball.vy=ball.y<field.height/2?Math.abs(ball.vy)*.82:-Math.abs(ball.vy)*.82;hit=true;}
-     if(ball.x<0||ball.x>field.width){ball.x=clamp(ball.x,.04,field.width-.04);ball.vx=ball.x<field.width/2?Math.abs(ball.vx)*.8:-Math.abs(ball.vx)*.8;hit=true;}
+     if(ball.y<0||ball.y>field.height){ball.y=clamp(ball.y,.04,field.height-.04);ball.vy=ball.y<field.height/2?Math.abs(ball.vy)*(shape?.62:.82):-Math.abs(ball.vy)*(shape?.62:.82);hit=true;}
+     if(ball.x<0||ball.x>field.width){ball.x=clamp(ball.x,.04,field.width-.04);ball.vx=ball.x<field.width/2?Math.abs(ball.vx)*(shape?.62:.8):-Math.abs(ball.vx)*(shape?.62:.8);hit=true;}
      if(hit){if(ball.owner){ball.owner=null;}ball.offsideReceiver=null;ball.offsideLineX=null;ball.isThrowInFlight=false;flow.boardBounces++;event('OFF THE BOARDS',null,'board');return;}
     }
    }
    return originalCollision.call(this);
   };
+ }
+ // Keep roles spread in a diamond, with a distinct attacking/defending shape.
+ // Positions are targets, not teleports: upstream steering and FSMs still move players.
+ if(shape){
+  const sticky={A:null,B:null};
+  sim.shapeChasers=function(){
+   const ball=this.ball, picks=[];
+   if(!ball||ball.owner?.role==='GK')return picks;
+   for(const key of ['A','B']){
+    if(ball.owner?.team===key){sticky[key]=null;continue;}
+    const team=this.getTeam(key),receiver=team?.receivingPlayer;
+    if(!ball.owner&&receiver&&receiver.fsm.getNameOfCurrentState()==='Receive'){sticky[key]=null;continue;}
+    const candidates=this.players.filter(p=>p.team===key&&this.canBecomeChaser(p)).map(p=>({p,d:Math.hypot(p.x-ball.x,p.y-ball.y)})).sort((a,b)=>a.d-b.d);
+    const best=candidates[0],prior=candidates.find(c=>c.p===sticky[key]);
+    if(best){sticky[key]=prior&&prior.d<best.d+2.5?prior.p:best.p;picks.push(sticky[key]);}
+   }
+   return picks;
+  };
+  for(const p of sim.players){
+   if(p.role==='GK')continue;
+   const original=p.getIdleMoveTarget.bind(p);
+   p.getIdleMoveTarget=function(){
+    if(sim.matchState!=='play'||sim.setPieceType)return original();
+    const ball=sim.ball,right=sim.isSecondHalf()?p.team==='B':p.team==='A',sign=right?1:-1;
+    const bx=right?ball.x:field.width-ball.x,by=right?ball.y:field.height-ball.y;
+    const team=sim.getTeam(p.team),attacking=ball.owner?ball.owner.team===p.team:team?.receivingPlayer!=null;
+    const depth=bx/field.width,wide=field.height;
+    let x,y;
+    if(p.role==='CB'){x=clamp(bx-field.width*.23,field.width*.12,field.width*.57);y=wide*.5+(by-wide*.5)*.30;}
+    else if(p.role==='CF'){x=clamp(bx+field.width*(attacking?.22:.12),field.width*.40,field.width*.88);y=wide*.5+(by-wide*.5)*.20;}
+    else {const left=p.role==='LM';x=clamp(bx+field.width*(attacking?.065:-.13),field.width*.22,field.width*.78);y=wide*(left?.20:.80)+(by-wide*.5)*.15;}
+    // A supporting teammate in the carrier's lane offers a diagonal instead.
+    if(ball.owner?.team===p.team&&Math.hypot(x-bx,y-by)<field.width*.13){x=clamp(x+(p.role==='CB'?-1:1)*field.width*.12,field.width*.10,field.width*.90);}
+    return {x:right?x:field.width-x,y:right?y:field.height-y};
+   };
+  }
  }
  const halfEnd=()=>state.time<duration/2?duration/2:duration;
  function remember(p){if(!originals.has(p))originals.set(p,{...p.stats});return originals.get(p);}
@@ -175,7 +212,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   const before=sim.ball.owner,beforeShot=sim.ball.isShot,phaseBefore=sim.matchState,shotBefore=flow.shots;sim.updateAll();frames++;
   if(arcade&&sim.matchState!==phaseBefore){const limits={kickoff:1,goal:2,halftime:2.5,freekick:1.1,penalty:1.3,card:1.2};const limit=limits[sim.matchState];if(limit!=null&&sim.stateTimer>limit)sim.stateTimer=limit;}
   snapshot();rocketKick=false;
-  flow.phases[phaseBefore]=(flow.phases[phaseBefore]||0)+1;if(phaseBefore==='play'){flow.playTicks++;flow.quiet=flow.shots>shotBefore?0:flow.quiet+SOCCER_STEP;flow.longestQuiet=Math.max(flow.longestQuiet,flow.quiet);}else flow.deadTicks++;
+  flow.phases[phaseBefore]=(flow.phases[phaseBefore]||0)+1;if(phaseBefore==='play'){flow.playTicks++;if(sim.ball.owner)flow.ownedTicks++;if(frames%5===0){flow.shapeTicks++;const players=sim.players.filter(p=>p.role!=='GK'&&!p.isSentOff);const near=players.filter(p=>Math.hypot(p.x-sim.ball.x,p.y-sim.ball.y)<field.height*.13).length;if(near>=4)flow.crowdedTicks++;for(const key of ['A','B']){const ps=players.filter(p=>p.team===key);let n=0,d=0;for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){d+=Math.hypot(ps[i].x-ps[j].x,ps[i].y-ps[j].y)/field.height;n++;}flow.spreadSum+=n?d/n/2:0;}}flow.quiet=flow.shots>shotBefore?0:flow.quiet+SOCCER_STEP;flow.longestQuiet=Math.max(flow.longestQuiet,flow.quiet);}else flow.deadTicks++;
   let changed=false;for(const chip of state.chips){if((chip.status==='active'&&(state.time>=chip.until||state.phase==='halftime'||state.finished))||(chip.status==='armed'&&(state.phase==='halftime'||state.finished))){chip.status='spent';changed=true;}}
   if(changed){rebuildHome();state.chipRevision++;}
   const after=sim.ball.owner;
@@ -187,7 +224,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
    if(key!==lastLaunch){lastLaunch=key;pending={kicker,team:kicker.team};stats[side(kicker.team)].passes++;}
   }else if(after||sim.ball.passFromX==null){lastLaunch=null;}
   if(after&&pending){
-   if(after!==pending.kicker&&after.team===pending.team){const a=stats[side(after.team)];a.completed++;if(lastCompleted&&lastCompleted.from===after&&lastCompleted.to===pending.kicker&&frames-lastCompleted.frame<100){flow.returnPasses++;event('QUICK RETURN PASS',after.team,'play');}lastCompleted={from:pending.kicker,to:after,frame:frames};if(chainSide!==side(after.team)){chain=0;chainSide=side(after.team);}chain++;a.bestChain=Math.max(a.bestChain,chain);if(after.team==='A'){gainCharge();comboPass();}else breakCombo();}
+   if(after!==pending.kicker&&after.team===pending.team){const a=stats[side(after.team)];a.completed++;if(lastCompleted&&lastCompleted.from===after&&lastCompleted.to===pending.kicker&&frames-lastCompleted.frame<100){flow.returnPasses++;event('QUICK RETURN PASS',after.team,'play');}lastCompleted={from:pending.kicker,to:after,frame:frames};if(chainSide!==side(after.team)){chain=0;chainSide=side(after.team);}chain++;if(chain===3)flow.threePassChains++;a.bestChain=Math.max(a.bestChain,chain);if(after.team==='A'){gainCharge();comboPass();}else breakCombo();}
    else if(after.team!==pending.team){stats[side(after.team)].interceptions++;event('INTERCEPTION',after.team,'tackle');if(after.team==='A')gainCharge();chain=0;chainSide=-1;breakCombo();}
    pending=null;
   }
