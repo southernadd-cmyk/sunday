@@ -51,3 +51,7 @@ Plan the receiver's run, select the ball carrier, choose PASS and select the run
 ## Training ground
 
 The title screen offers PLAY TUTORIAL or direct entry. Five interactive drills teach movement, timed passing into space, finishing, standing tackles and sliding tackles. Each checks the actual outcome, permits retry or repeat and preserves the cup and club profile. Reopen training from the help menu at any point between turns. Enter starts training, and advances/retries a completed drill. The challenge preview measures the defender-to-ball distance at the chosen time and marks reach on the pitch. Cyan timing indicators mean a predicted regain, orange a miss, red a foul. STAND/SLIDE initially selects the earliest viable timing if one exists; user-drawn routes and manual timing choices remain supported. Training uses deterministic fixed scenarios, not a separate physics system.
+
+## Main menu
+
+SUNDAY opens on a dedicated title screen: NEW CAREER starts a fresh cup run, TUTORIALS opens the training ground (full sequence or individual drills). MENU during play allows resuming the current in-session career; starting another requires confirmation. Training preserves the active career and its planned orders, and returns to the tutorial selection or the live career depending on entry point. Existing banked club upgrades are retained. Resume is session-only; this change does not add saved career persistence across reloads.

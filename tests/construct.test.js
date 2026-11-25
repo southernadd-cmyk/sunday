@@ -54,13 +54,13 @@ test('native Construct package references existing types, scripts, layouts and o
  assert.match(readFileSync(new URL('../public/construct/index.html',import.meta.url),'utf8'),/Scirra Construct/);
 });
 test('pass transfers control, and a non-striker can plan a run',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');click(g,'PASS');tapPlayer(g,1);
+ const g=new Sunday(runtime());click(g,'NEW CAREER');click(g,'PASS');tapPlayer(g,1);
  assert.equal(g.order.kind,'pass');assert.equal(g.preview.type,'move');click(g,'PLAY 2s');finish(g);
  assert.equal(g.run.state.ballOwner,1);assert.equal(g.selected,1);
  g.key({key:'w'});assert.equal(g.order.actor,1);assert.equal(g.preview.order.actor,1);
 });
 test('off-ball plans survive selection and play simultaneously',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');
+ const g=new Sunday(runtime());click(g,'NEW CAREER');
  tapPlayer(g,4);const before=clone(g.run.state);g.key({key:'w'});tapPlayer(g,0);
  assert.ok(g.support[4]?.length);g.key({key:'a'});assert.equal(g.order.actor,0);
  assert.ok(g.preview.valid);g.play();finish(g);
@@ -69,13 +69,13 @@ test('off-ball plans survive selection and play simultaneously',()=>{
  g.key({key:'r'});assert.deepEqual(g.run.state,before);
 });
 test('one-two has an immediately playable suggested run and rewind restores possession and resources',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.key({key:'o'});tapPlayer(g,1);
+ const g=new Sunday(runtime());click(g,'NEW CAREER');g.key({key:'o'});tapPlayer(g,1);
  assert.equal(g.order.kind,'one-two');assert.ok(g.order.path.length);assert.equal(g.preview.type,'move');
  const before=clone(g.run.state);click(g,'PLAY 2s');finish(g);assert.equal(g.run.state.passes,0);g.key({key:'r'});
  assert.deepEqual(g.run.state,before);assert.equal(g.run.rewinds,0);
 });
 test('native hit regions and pooled labels stay finite in a portrait viewport with a shifted origin',()=>{
- const r=runtime({width:960,height:2000,left:130,top:-600,cssScale:.375}),g=new Sunday(r);click(g,'STEP ONTO THE PITCH');
+ const r=runtime({width:960,height:2000,left:130,top:-600,cssScale:.375}),g=new Sunday(r);click(g,'NEW CAREER');
  const range=clone(g.run.state);click(g,'PASS');tapPlayer(g,1);assert.equal(g.order.kind,'pass');
  assert.deepEqual(g.run.state,range);assert.equal(g.narrow,true);
  for(const b of g.buttons){assert.ok([b.x,b.y,b.w,b.h].every(Number.isFinite));assert.ok(b.x>=r.viewport.left&&b.x+b.w<=r.viewport.right+.001);}
@@ -83,12 +83,12 @@ test('native hit regions and pooled labels stay finite in a portrait viewport wi
  const created=g.labels.length;g.refresh();g.refresh();assert.equal(g.labels.length,created);
 });
 test('native pointer input plots a route and playback reaches the same ghost endpoint',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');const player=g.run.state.actors[0],target={x:player.x-5,z:player.z-8},p=g.point(target);
+ const g=new Sunday(runtime());click(g,'NEW CAREER');const player=g.run.state.actors[0],target={x:player.x-5,z:player.z-8},p=g.point(target);
  const [clientX,clientY]=g.field.layerToCssPx(p.x,p.y),e={pointerId:1,button:0,clientX,clientY};g.pointerDown(e);g.pointerUp(e);
  assert.equal(g.order.kind,'run');const end={...g.preview.end};assert.equal(g.preview.type,'move');g.play();finish(g);assert.ok(distance(g.run.state.actors[0],end)<1e-8);
 });
 test('a learned dink is available on touch controls and cannot leak into a fresh run',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.buffs.chip=1;g.refresh();click(g,'SHOOT');click(g,'DINK');assert.equal(g.chip,true);
+ const g=new Sunday(runtime());click(g,'NEW CAREER');g.run.buffs.chip=1;g.refresh();click(g,'SHOOT');click(g,'DINK');assert.equal(g.chip,true);
  g.newRun();assert.equal(g.run.buffs.chip,0);assert.equal(g.chip,false);assert.ok(!g.buttons.some(b=>b.label.text==='DINK ON'));
 });
 
@@ -106,11 +106,11 @@ test('desktop camera rotates the pitch and maps input consistently',()=>{
   const q=g.point(p),a=g.ground(q.x,q.y);assert.ok(distance(a,p)<1e-8);
  }
  assert.ok(g.point({x:0,z:-47}).x>g.point({x:0,z:47}).x);
- click(g,'STEP ONTO THE PITCH');g.key({key:'arrowright'});assert.ok(g.order.path[0].z<g.run.state.actors[0].z);
+ click(g,'NEW CAREER');g.key({key:'arrowright'});assert.ok(g.order.path[0].z<g.run.state.actors[0].z);
 });
 
 test('defence controls, preview and playback use the same possession rules',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.kickoff(false);g.selected=g.run.selection();g.updateActors();g.refresh();
+ const g=new Sunday(runtime());click(g,'NEW CAREER');g.run.kickoff(false);g.selected=g.run.selection();g.updateActors();g.refresh();
  assert.ok(g.run.defending);assert.ok(g.run.threat);click(g,'PRESS');assert.ok(g.preview.valid);
  const p=g.preview,clock=g.run.state.beats;g.play();finish(g);
  assert.equal(g.run.state.beats,clock-1);assert.equal(g.run.lastResult.type,p.type);
@@ -119,12 +119,12 @@ test('defence controls, preview and playback use the same possession rules',()=>
  click(g,'HOLD');assert.ok(g.preview.valid);
 });
 test('goalkeeper is selectable and can distribute possession',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.state.ballOwner=15;g.run.state.ball={x:.5,z:44,y:.6};g.run.intents=g.run.makeIntents();g.selected=0;g.refresh();
+ const g=new Sunday(runtime());click(g,'NEW CAREER');g.run.state.ballOwner=15;g.run.state.ball={x:.5,z:44,y:.6};g.run.intents=g.run.makeIntents();g.selected=0;g.refresh();
  g.select(15);assert.equal(g.selected,15);g.pass(6);assert.ok(g.preview.valid);assert.equal(g.order.actor,15);
 });
 
 test('timed reception buttons retain the runner path and alter delivery',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');
+ const g=new Sunday(runtime());click(g,'NEW CAREER');
  for(const i of [7,8,9,10,11,12,13,14])Object.assign(g.run.state.actors[i],{x:32,z:-42});
  Object.assign(g.run.state.actors[0],{x:0,z:0});Object.assign(g.run.state.actors[1],{x:8,z:0});g.run.state.ball={x:.5,z:-1,y:.6};g.run.intents=g.run.makeIntents();g.updateActors();g.refresh();
  tapPlayer(g,1);g.planPath([{x:8,z:-11}]);tapPlayer(g,0);click(g,'PASS');tapPlayer(g,1);
@@ -132,14 +132,14 @@ test('timed reception buttons retain the runner path and alter delivery',()=>{
  click(g,'1.5s');assert.ok(g.preview.valid);assert.ok(g.preview.delivery.target.z<early);click(g,'PLAY 2s');finish(g);assert.equal(g.selected,1);
 });
 test('challenge controls arm a tackle and allow its timing to be adjusted',()=>{
- const g=new Sunday(runtime());click(g,'STEP ONTO THE PITCH');g.run.kickoff(false);g.selected=4;g.updateActors();g.refresh();
+ const g=new Sunday(runtime());click(g,'NEW CAREER');g.run.kickoff(false);g.selected=4;g.updateActors();g.refresh();
  click(g,'STAND');assert.equal(g.order.kind,'tackle');assert.equal(g.order.tackle,'stand');click(g,'0.5s');assert.equal(g.order.tackleAt,.5);
  click(g,'SLIDE');assert.equal(g.order.tackle,'slide');click(g,'2.0s');assert.equal(g.order.tackleAt,2);assert.ok(g.preview.valid);
 });
 
 test('tutorial is playable from start to finish and does not alter the saved cup',()=>{
  const g=new Sunday(runtime()),cup=g.run,original=clone(cup.state),profile=clone(g.profile);
- click(g,'PLAY TUTORIAL');assert.equal(g.practice.index,0);
+ click(g,'TUTORIALS');click(g,'FULL TUTORIAL');assert.equal(g.practice.index,0);
  g.planPath([{x:0,z:-6}]);click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
  click(g,'NEXT DRILL');assert.equal(g.practice.index,1);
  tapPlayer(g,1);g.planPath([{x:8,z:-11}]);tapPlayer(g,0);click(g,'PASS');tapPlayer(g,1);click(g,'1.5s');click(g,'PLAY 2s');finish(g);
@@ -148,15 +148,29 @@ test('tutorial is playable from start to finish and does not alter the saved cup
  click(g,'NEXT DRILL');click(g,'STAND');assert.equal(g.preview.tackleOutcome,'won');assert.ok(g.preview.challenge.distance<=g.preview.challenge.reach);
  click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
  click(g,'NEXT DRILL');click(g,'SLIDE');assert.equal(g.preview.tackleOutcome,'won');click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
- click(g,'PLAY THE CUP');assert.equal(g.practice,null);assert.equal(g.run,cup);assert.deepEqual(cup.state,original);assert.deepEqual(g.profile,profile);
+ click(g,'BACK TO TUTORIALS');assert.equal(g.practice,null);assert.equal(g.menuPage,'tutorials');assert.equal(g.run,cup);assert.deepEqual(cup.state,original);assert.deepEqual(g.profile,profile);
 });
 test('a failed drill can be retried with exactly the same scenario',()=>{
- const g=new Sunday(runtime());click(g,'PLAY TUTORIAL');g.loadDrill(3);const start=clone(g.run.state);
+ const g=new Sunday(runtime());click(g,'TUTORIALS');click(g,'4. STANDING TACKLE');const start=clone(g.run.state);
  g.planPath([{x:25,z:17}]);click(g,'STAND');assert.equal(g.preview.tackleOutcome,'miss');
  click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,false);click(g,'RETRY DRILL');assert.deepEqual(g.run.state,start);
  click(g,'STAND');assert.equal(g.preview.tackleOutcome,'won');
 });
 test('tutorial can be reopened from help and works on portrait input',()=>{
- const g=new Sunday(runtime({width:960,height:2000,cssScale:.375}));click(g,'STEP ONTO THE PITCH');click(g,'?');click(g,'PLAY TUTORIAL');
+ const g=new Sunday(runtime({width:960,height:2000,cssScale:.375}));click(g,'NEW CAREER');click(g,'?');click(g,'PLAY TUTORIAL');
  assert.equal(g.practice.index,0);assert.ok(!g.landscape);click(g,'EXIT');assert.equal(g.practice,null);
+});
+
+test('main menu isolates new careers, tutorial selection and resume',()=>{
+ const g=new Sunday(runtime());assert.ok(g.intro);assert.ok(g.buttons.some(b=>b.label.text==='NEW CAREER'));assert.ok(!g.buttons.some(b=>b.label.text==='PLAY 2s'));
+ click(g,'TUTORIALS');click(g,'3. SHOOTING');assert.equal(g.practice.index,2);assert.equal(g.practiceSingle,true);
+ click(g,'SHOOT');g.aim(5.8);click(g,'PLAY 2s');finish(g);click(g,'BACK TO TUTORIALS');assert.ok(g.intro);
+ click(g,'BACK TO MAIN MENU');click(g,'NEW CAREER');assert.equal(g.intro,false);const cup=g.run;
+ g.planPath([{x:-12,z:-6}]);const plan=clone(g.order);click(g,'MENU');click(g,'NEW CAREER');assert.equal(g.menuPage,'confirm');click(g,'CANCEL');click(g,'RESUME CAREER');assert.equal(g.run,cup);assert.deepEqual(g.order,plan);
+ click(g,'MENU');click(g,'NEW CAREER');click(g,'START NEW CAREER');assert.notEqual(g.run,cup);
+});
+test('title and tutorial menus fit a narrow viewport',()=>{
+ const g=new Sunday(runtime({width:960,height:2000,left:130,top:-600,cssScale:.375}));click(g,'TUTORIALS');
+ for(const b of g.buttons)assert.ok(b.x>=g.v.left&&b.x+b.w<=g.v.right&&b.y>=g.v.top&&b.y+b.h<=g.v.bottom);
+ g.key({key:'5'});assert.equal(g.practice.index,4);click(g,'EXIT');assert.equal(g.menuPage,'tutorials');assert.equal(g.intro,true);
 });
