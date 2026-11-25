@@ -59,3 +59,7 @@ SUNDAY opens on a dedicated title screen: NEW CAREER starts a fresh cup run, TUT
 ## Aiming shots
 
 SHOOT now highlights the full goal mouth. Tap anywhere on the goal line to aim, or use NEAR, CENTRE and FAR in the command panel. Near and far refer to the post relative to the ball carrier, not screen orientation; the selected target has a crosshair and the path previews interceptions/saves. Tap a different point to adjust the shot before PLAY 2s. Keyboard 1/2/3 select near/far/centre. There is no independent shot-height control; the learned DINK remains a separate chip option.
+
+## Autoplay lab (experimental)
+
+Choose AUTOPLAY LAB on the main menu. Draft one team behaviour, watch a continuous 75-second autonomous match at 1×/2×/4× speed, then draft another before the next opponent. Three matches per experimental run; all results progress so builds can be compared. Six functional traits: Overlap, One-touch, Ball hunters, Have a go, Counter runners, Safety first. Both sides move, pass, tackle and shoot using the same fixed-step seeded simulation, with physical ball flight and actual result events. The existing tactical career and its profile are untouched. This is a first prototype, not tuned competitive balance, and the visual native export still needs human playtesting.
