@@ -4,7 +4,7 @@
 import {systemAssignment,resolveSystem,systemCanPress,freeKickLayout,planDirectFreeKick,adaptiveTactic,ADAPTIVE_REVIEW_SECONDS} from './five-tactics.js';
 import {createMutations,MUTATIONS} from './mutations.js';
 import {possessionIntent,possessionAction} from './possession-intent.js';
-const {PlayerStates}=require('./kernel/core/entities/player.js');
+const {PlayerStates,computeShootKick,computeTackleType}=require('./kernel/core/entities/player.js');
 const {Simulator,MatchStates}=require('./kernel/providers/simulator/simulator.js');
 const {Settings}=require('./kernel/settings.js');
 const {predict3D}=require('./kernel/core/lib/ball_prediction.js');
@@ -120,6 +120,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  if(intent&&options.freeKicks!==false){
   const setup=sim.setupSetPiecePositions.bind(sim);
   sim.setupSetPiecePositions=function(type,sideName,kickingTeam,...rest){
+   mutations?.recoverAll();
    const before=this.players.filter(p=>!p.isSentOff).map(p=>({p,x:p.x,y:p.y}));
    setup(type,sideName,kickingTeam,...rest);
    if(type!=='freekick'){this.sundayFreekickPlan=null;this.sundayFreekickTaker=null;return;}
@@ -377,7 +378,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   mutations=createMutations({sim,field,dt:SOCCER_STEP,event,resetPlayer:p=>{p.fsm.changeState(PlayerStates.Idle);p._currentSpeed=0;p.receiveTarget=null;p.passTarget=null;p.shotAim=null;}});
   state.activateMutation=(id,target)=>{const point=target&&typeof target==='object'?{x:(.5-target.z/94)*field.width,y:(target.x/68+.5)*field.height}:target;const ok=mutations.activate(id,point);snapshot();return ok;};
   state.mutationDefinitions=MUTATIONS;
-  if(options.testHooks)state.mutationTest={controller:mutations,sim,field};
+  if(options.testHooks)state.mutationTest={controller:mutations,sim,field,computeShootKick,computeTackleType};
  }
  function point(p){return {x:(p.y/field.height-.5)*68,z:(.5-p.x/field.width)*94};}
  // Match-clock review windows, not real-world time. Reviews occur in open
@@ -424,7 +425,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  }
  function step(){
   if(state.finished)return;
-  if(mutations&&!mutations.before()){snapshot();return;}
+  if(mutations&&!mutations.before()){pending=null;lastLaunch=null;lastCompleted=null;lastThirdSide=null;chain=0;chainSide=-1;layoff=null;directFlight=null;snapshot();return;}
   if(arcade&&sim.ball){sim.ball.offsideReceiver=null;sim.ball.offsideLineX=null;}
   // Reapply team-local knobs before the tick; upstream owns every decision.
   Settings.AI.A=home;Settings.AI.B=away;Time.deltaTime=SOCCER_STEP;
