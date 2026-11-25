@@ -183,7 +183,7 @@ export class Run{
  preview(order){
   const clean=this.normalise(order);if(clean.error)return {valid:false,error:clean.error};
   const r=this.simulate(clean,false);
-  return {valid:true,order:clean,type:r.type,hit:r.hit,point:r.point,detail:r.detail,end:r.end.actors[clean.actor],ball:r.end.ball,ballOwner:r.end.ballOwner,passPoints:r.passPoints,delivery:clean.delivery,tacklePoint:r.tacklePoint,tackleOutcome:r.tackleOutcome};
+  return {valid:true,order:clean,type:r.type,hit:r.hit,point:r.point,detail:r.detail,end:r.end.actors[clean.actor],ball:r.end.ball,ballOwner:r.end.ballOwner,passPoints:r.passPoints,delivery:clean.delivery,tacklePoint:r.tacklePoint,tackleOutcome:r.tackleOutcome,challenge:r.challenge};
  }
  simulate(order,record=false){
   const start=this.state,actor=order.actor??0,positions=start.actors.map(a=>({...a})),origin={...start.actors[actor]},end=clone(start);
@@ -382,7 +382,7 @@ export class MatchRun extends Run{
   }
   const s=this.state,end=clone(s),positions=s.actors.map(a=>({...a})),actor=order.actor,t=this.threat;
   const frames=record?new Float32Array((STEPS+1)*STRIDE):null;
-  let ball={...s.ball},owner=s.ballOwner,type='move',detail='',hit=null,point=null,count=0,tackleOutcome=null,tacklePoint=null;
+  let ball={...s.ball},owner=s.ballOwner,type='move',detail='',hit=null,point=null,count=0,tackleOutcome=null,tacklePoint=null,challenge=null;
   const recovery=s.tackleRecovery||{},challengeStep=order.kind==='tackle'?Math.round(order.tackleAt/BEAT*STEPS):-1;
   const length=routeLength(order.path),flight=t.kind==='shot'?distance(t.from,t.target)/34:BEAT*.65;
   for(let step=0;step<=STEPS;step++){
@@ -401,14 +401,17 @@ export class MatchRun extends Run{
      }
     }
     if(type==='move'&&step===challengeStep){
-     const a=positions[actor],carrier=positions[owner],slide=order.tackle==='slide',d=distance(a,ball),body=distance(a,carrier),behind=a.z<carrier.z-1.2;
+     const a=positions[actor],carrier=positions[owner],slide=order.tackle==='slide',d=distance(a,ball),body=distance(a,carrier);
+     const motion={x:this.intents[owner].x-s.actors[owner].x,z:this.intents[owner].z-s.actors[owner].z},speed=Math.hypot(motion.x,motion.z);
+     const behind=speed>.1?((a.x-carrier.x)*motion.x+(a.z-carrier.z)*motion.z)/speed< -1.2:a.z<carrier.z-1.2;
+     const reach=(slide?3.7:2.1)+this.buffs.press;challenge={defender:{x:a.x,z:a.z},ball:{x:ball.x,z:ball.z},distance:d,reach,behind,protected:flying||s.freeKick,time};
      tacklePoint={x:ball.x,z:ball.z};
-     if(flying||s.freeKick){tackleOutcome='miss';detail='Challenge mistimed: the ball is in flight or protected.';}
-     else if((slide&&behind&&body<=4.2)||(body<=2.6&&d>(slide?3.7:2.1)+this.buffs.press)){
-      tackleOutcome='foul';type='foul';point=tacklePoint;hit=actor;detail='Foul! They have a free kick. The defender must recover.';
-     }else if(d<=(slide?3.7:2.1)+this.buffs.press){
+     if(flying||s.freeKick){tackleOutcome='miss';detail='Ball in flight or protected. Cover the passing lane instead.';}
+     else if(slide&&behind&&body<=4.2){
+      tackleOutcome='foul';type='foul';point=tacklePoint;hit=actor;detail='Slide from behind: foul. They have a free kick.';
+     }else if(d<=reach){
       tackleOutcome='won';type='regain';point=tacklePoint;hit=actor;owner=actor;ball=foot(a);detail=slide?'Sliding tackle won! Break forward.':'Standing tackle won! Break forward.';
-     }else{tackleOutcome='miss';detail='Missed challenge. Recover your position.';}
+     }else{tackleOutcome='miss';detail='Out of reach: '+d.toFixed(1)+'m away, '+reach.toFixed(1)+'m reach. Close down or change timing.';}
     }
     if(type==='move'&&t.kind==='shot'&&time>=flight){type='conceded';detail='They found the corner. Reset and respond.';}
    }
@@ -419,8 +422,8 @@ export class MatchRun extends Run{
   if(tackleOutcome&&(order.tackle==='slide'||tackleOutcome!=='won'))end.tackleRecovery[actor]=1;
   if(type==='foul')end.fouls=(s.fouls||0)+1;
   if(order.burst)end.bursts--;
-  if(type==='regain'){end.regains++;end.counter=2;}
-  return {type,detail,hit,point,end,frames,count,duration:(count-1)/STEPS*BEAT,order,passPoints:t.kind==='dribble'?null:[t.from,t.target],tacklePoint,tackleOutcome};
+  if(type==='regain'){end.regains++;end.counter=2;if(order.kind==='tackle'&&!challenge)detail+=' Before the scheduled tackle.';}
+  return {type,detail,hit,point,end,frames,count,duration:(count-1)/STEPS*BEAT,order,passPoints:t.kind==='dribble'?null:[t.from,t.target],tacklePoint,tackleOutcome,challenge};
  }
  commit(order){
   const clean=this.normalise(order);if(clean.error)return {type:'invalid',detail:clean.error};
@@ -459,4 +462,32 @@ export class MatchRun extends Run{
   if(GEAR[id])return super.collect(id);
   const g=MATCH_GEAR[id];if(!g)return false;this.gear.push(id);this.buffs[g.effect]+=g.amount;this.fixtureIndex++;this.attempt=0;this.newAttack();return true;
  }
+}
+
+export const PRACTICE=[
+ {title:'1/5 · MOVE',hint:'Tap grass ahead of the striker, then PLAY 2s.',actor:0},
+ {title:'2/5 · PASS INTO SPACE',hint:'Select KEV, plot a run, select the passer, PASS to KEV and choose 1.0s or 1.5s.',actor:0},
+ {title:'3/5 · FINISH',hint:'Choose SHOOT, pick a goal corner and PLAY 2s.',actor:0},
+ {title:'4/5 · STANDING TACKLE',hint:'Select LEE. Choose STAND. Check the reach and timing, then PLAY 2s.',actor:4},
+ {title:'5/5 · SLIDING TACKLE',hint:'Choose SLIDE. Approach from the side, not behind. Pick a clean timing and PLAY 2s.',actor:4}
+];
+export function practiceRun(index){
+ const run=new MatchRun(8123,defaultProfile());run.start();const s=run.state;
+ for(const a of s.actors)if(a.id>=7&&a.id<=14){a.x=32;a.z=-40;a.active=false;}
+ for(const id of HOME_IDS)Object.assign(s.actors[id],{x:-28+(id%3)*4,z:22+(id%2)*7});
+ const set=(id,x,z)=>Object.assign(s.actors[id],{x,z});
+ set(15,0,45);set(0,0,0);set(1,8,0);
+ if(index===2){set(0,4,-37);set(14,-4,-44);}
+ if(index>=3){set(7,0,12);s.actors[7].active=true;set(4,index===3?5:7,17);s.ballOwner=7;}else s.ballOwner=0;
+ s.ball=foot(s.actors[s.ballOwner]);s.beats=16;
+ run.intents=s.actors.map(a=>({x:a.x,z:a.z,id:a.id}));
+ if(index>=3){run.intents[7]={x:0,z:18,id:7};run.threat={kind:'dribble',from:{...s.ball},target:foot(run.intents[7]),owner:7,detail:'Watch the orange dribble line.'};}else run.threat=null;
+ run.message=PRACTICE[index].hint;return run;
+}
+export function practicePassed(index,result){
+ const o=result.order;
+ if(index===0)return o.kind==='run'&&o.actor===0&&result.type==='move'&&distance(o.path[0],result.end.actors[0])>=3;
+ if(index===1)return o.kind==='pass'&&o.ally===1&&!!o.delivery&&!!o.support[1]&&result.type==='move'&&result.end.ballOwner===1;
+ if(index===2)return o.kind==='shot'&&result.type==='goal';
+ return o.kind==='tackle'&&o.tackle===(index===3?'stand':'slide')&&result.tackleOutcome==='won'&&result.hit===4;
 }

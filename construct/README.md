@@ -47,3 +47,15 @@ For a normal web export, use **Menu → Project → Export → Web (HTML5)**. Fr
 ## Timed passes and challenges
 
 Plan the receiver's run, select the ball carrier, choose PASS and select the runner. AUTO leads the runner at ordinary pass pace; 0.5s, 1.0s, 1.5s and 2.0s choose exact reception times. Tap the cyan markers along the run or use the command buttons. The preview rejects unreachable passes and shows the actual trajectory. Without possession, PRESS approaches but does not tackle. STAND (T) is short reach; SLIDE (F) is longer reach but risks a foul from behind. Choose the challenge time and adjust the approach route. A miss or slide leaves the defender recovering next turn; a foul gives the opponent a free kick. Interceptions and keeper saves remain positional.
+
+## Training ground
+
+The title screen offers PLAY TUTORIAL or direct entry. Five interactive drills teach movement, timed passing into space, finishing, standing tackles and sliding tackles. Each checks the actual outcome, permits retry or repeat and preserves the cup and club profile. Reopen training from the help menu at any point between turns. Enter starts training, and advances/retries a completed drill. The challenge preview measures the defender-to-ball distance at the chosen time and marks reach on the pitch. Cyan timing indicators mean a predicted regain, orange a miss, red a foul. STAND/SLIDE initially selects the earliest viable timing if one exists; user-drawn routes and manual timing choices remain supported. Training uses deterministic fixed scenarios, not a separate physics system.
+
+## Main menu
+
+SUNDAY opens on a dedicated title screen: NEW CAREER starts a fresh cup run, TUTORIALS opens the training ground (full sequence or individual drills). MENU during play allows resuming the current in-session career; starting another requires confirmation. Training preserves the active career and its planned orders, and returns to the tutorial selection or the live career depending on entry point. Existing banked club upgrades are retained. Resume is session-only; this change does not add saved career persistence across reloads.
+
+## Aiming shots
+
+SHOOT now highlights the full goal mouth. Tap anywhere on the goal line to aim, or use NEAR, CENTRE and FAR in the command panel. Near and far refer to the post relative to the ball carrier, not screen orientation; the selected target has a crosshair and the path previews interceptions/saves. Tap a different point to adjust the shot before PLAY 2s. Keyboard 1/2/3 select near/far/centre. There is no independent shot-height control; the learned DINK remains a separate chip option.
