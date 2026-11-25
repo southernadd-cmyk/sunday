@@ -195,3 +195,12 @@ test('shooting mode ignores grass taps and keeps an impossible shot visibly inva
  assert.equal(g.targetMode,'shot');assert.equal(g.order,null);
  tapGoal(g,0);assert.equal(g.order.kind,'shot');assert.equal(g.preview.valid,false);assert.ok(!g.buttons.find(b=>b.label.text==='PLAY 2s').enabled);
 });
+
+test('autoplay lab is separate from tactical career, drafts and plays a real match',()=>{
+ const g=new Sunday(runtime()),cup=g.run,original=clone(cup.state);click(g,'AUTOPLAY LAB');assert.equal(g.auto.phase,'draft');
+ const id=g.auto.offers[0];g.autoChoose(id);assert.deepEqual(g.auto.traits,[id]);assert.equal(g.auto.phase,'match');assert.equal(g.planning(),false);
+ click(g,'PAUSE');const time=g.auto.match.time;g.advanceAuto(2);assert.equal(g.auto.match.time,time);click(g,'PLAY');click(g,'4×');
+ for(let i=0;i<25&&g.auto.phase==='match';i++)g.advanceAuto(1);
+ assert.equal(g.auto.phase,'result');assert.equal(g.auto.results.length,1);click(g,'DRAFT NEXT BEHAVIOUR');assert.equal(g.auto.phase,'draft');assert.ok(!g.auto.offers.includes(id));
+ click(g,'BACK TO MENU');assert.equal(g.auto,null);assert.equal(g.run,cup);assert.deepEqual(g.run.state,original);
+});
