@@ -157,3 +157,55 @@ export function freeKickLayout({width,height,x,y,attackers,defenders,indirect=fa
  });
  return {direct,clearance,attack,wall,defend};
 }
+
+// Direct restart planner. Accepts the engine's real flight predictor and
+// evaluates physically reachable goal-line crossings, not guaranteed goals.
+// The goalkeeper affects target preference, never an automatic veto.
+export function planDirectFreeKick({from,goal,wall=[],defenders=[],keeper=null,speed,shooting=65,accuracy=70,predict}){
+ const distance=Math.hypot(goal.lineX-from.x,(goal.yMin+goal.yMax)/2-from.y);
+ if(distance<2||distance>23||!Number.isFinite(speed)||speed<=0)return null;
+ const sign=Math.sign(goal.lineX-from.x),mid=(goal.yMin+goal.yMax)/2,span=goal.yMax-goal.yMin;
+ const style=[
+  {routine:'driven',heightSpeed:0.35,curveForce:0},
+  {routine:'curled',heightSpeed:1.8,curveForce:sign*2.6},
+  {routine:'curled',heightSpeed:1.8,curveForce:-sign*2.6},
+  ...[7,9,11].map(heightSpeed=>({routine:'dipped',heightSpeed,curveForce:0}))
+ ];
+ let best=null;
+ for(const st of style)for(const offset of [-.8,-.45,0,.45,.8]){
+  // Curved kicks start slightly outside the final target corridor.
+  const aim={x:goal.lineX,y:mid+offset*span*.5-st.curveForce*.22*distance/10};
+  const dx=aim.x-from.x,dy=aim.y-from.y,d=Math.hypot(dx,dy);
+  const launch={...from,z:0,vx:dx/d*speed,vy:dy/d*speed,vz:st.heightSpeed,curveForce:st.curveForce};
+  let prior=from,cross=null,block=false,risk=0;
+  for(let i=1;i<=50;i++){
+   const t=i*.05,p=predict(launch,t);
+   // Segment distance catches wall contacts between discrete samples.
+   const vx=p.x-prior.x,vy=p.y-prior.y,den=vx*vx+vy*vy||1;
+   for(const w of wall){
+    const u=clamp(((w.x-prior.x)*vx+(w.y-prior.y)*vy)/den,0,1);
+    const gap=Math.hypot(prior.x+vx*u-w.x,prior.y+vy*u-w.y);
+    const h=(prior.z||0)+((p.z||0)-(prior.z||0))*u;
+    if(gap<.85&&h<2.5){block=true;break;}
+   }
+   if(block)break;
+   for(const o of defenders){
+    if(p.z<1.7&&Math.hypot(p.x-o.x,p.y-o.y)<.7+Math.min(1.25,t*1.6))risk+=.055;
+   }
+   if(sign*(p.x-goal.lineX)>=0){
+    const u=(goal.lineX-prior.x)/(p.x-prior.x||1);
+    cross={y:prior.y+(p.y-prior.y)*u,z:(prior.z||0)+((p.z||0)-(prior.z||0))*u,t};break;
+   }
+   prior=p;
+  }
+  if(block||!cross||cross.y<goal.yMin+.30||cross.y>goal.yMax-.30||cross.z>goal.height-.20)continue;
+  const keeperGap=keeper?Math.abs(cross.y-keeper.y):Math.abs(cross.y-mid);
+  const margin=Math.min(cross.y-goal.yMin,goal.yMax-cross.y,goal.height-cross.z);
+  const skill=(shooting+accuracy)/200;
+  const complexity=st.routine==='driven'?0:st.routine==='curled'?.12:.20;
+  const score=1.4+Math.min(2.6,keeperGap)*.34+Math.min(.9,margin)*.20-risk-distance*.045-complexity*(1.35-skill);
+  if(!best||score>best.score)best={...st,aim,score,cross};
+ }
+ // Do not force a shot if the flight geometry is poor.
+ return best&&best.score>.43?best:null;
+}
