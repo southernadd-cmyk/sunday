@@ -1,5 +1,5 @@
 // Native Construct 3 presentation and input. The shared engine alone decides outcomes.
-import {MatchRun, MATCH_GEAR as GEAR, HOME_IDS, isHome, GOAL, PASS_RANGE, STRIDE, ACTORS, readProfile, saveProfile, purchase, UPGRADES, distance, route, clamp} from './engine.js';
+import {MatchRun, MATCH_GEAR as GEAR, HOME_IDS, isHome, ACTION_TIMES, along, GOAL, PASS_RANGE, STRIDE, ACTORS, readProfile, saveProfile, purchase, UPGRADES, distance, route, clamp} from './engine.js';
 
 const C={navy:[.09,.15,.25,.96],yellow:[1,.88,.35,1],cream:[.96,.96,.82,1],cyan:[.64,.9,.87,1],orange:[1,.66,.36,.8],red:[1,.39,.3,1],clear:[0,0,0,0]};
 const rgb=c=>c.slice(0,3);
@@ -33,12 +33,12 @@ export class Sunday{
   this.landscape=W/u>=740&&W/H>=1.25;
   const fieldWidth=W-(this.landscape?258*u:0);
   this.cx=L+fieldWidth/2;
-  this.scale=Math.max(.1,this.landscape?Math.min((fieldWidth-16*u)/110,(H-72*u)/88):Math.min((W-8*u)/88,(H-216*u)/110));
+  this.scale=Math.max(.1,this.landscape?Math.min((fieldWidth-16*u)/110,(H-72*u)/88):Math.min((W-8*u)/88,(H-278*u)/110));
   if(this.landscape){
    this.pitchRight=this.cx+55*this.scale;this.pitchTop=T+62*u+(H-72*u-88*this.scale)/2;
    Object.assign(this.pitch,{x:this.pitchRight,y:this.pitchTop,width:88*this.scale,height:110*this.scale,angle:Math.PI/2});
   }else{
-   this.top=T+62*u+6*this.scale+(H-216*u-110*this.scale)/2;
+   this.top=T+62*u+6*this.scale+(H-278*u-110*this.scale)/2;
    Object.assign(this.pitch,{x:this.cx-44*this.scale,y:this.top-6*this.scale,width:88*this.scale,height:110*this.scale,angle:0});
   }
   for(const canvas of [this.plans,this.canvas]){canvas.x=this.v.left;canvas.y=this.v.top;canvas.width=this.v.width;canvas.height=this.v.height;}
@@ -52,7 +52,7 @@ export class Sunday{
   previewOrder(order){this.order={...order,actor:this.selected,support:{...this.support}};this.preview=this.run.preview(this.order);}
   select(id){
    if(!this.planning()||!isHome(id)||id===this.selected)return;
-   if(this.order?.kind==='run'&&this.order.path?.length)this.support[this.selected]=this.order.path;
+   if(['run','tackle'].includes(this.order?.kind)&&this.order.path?.length)this.support[this.selected]=this.order.path;
    this.selected=id;this.burst=false;this.targetMode=null;
    const path=this.support[id]||[];delete this.support[id];
    if(path.length||Object.keys(this.support).length)this.previewOrder({kind:'run',path});
@@ -65,18 +65,39 @@ export class Sunday{
    if(this.selected!==this.run.state.ballOwner)this.select(this.run.state.ballOwner);
    this.target(mode);
   }
- defend(cover=false){if(!this.planning()||!this.run.defending)return;const p=this.run.defensivePoint(this.selected,cover);if(p)this.planPath([p]);}
+ defend(cover=false){if(!this.planning()||!this.run.defending)return;const p=this.run.defensivePoint(this.selected,cover);if(p){this.targetMode=null;this.previewOrder({kind:'run',path:[p],burst:this.burst});this.refresh();}}
  hold(){if(!this.planning())return;this.targetMode=null;this.previewOrder({kind:'hold',path:[]});this.refresh();}
  planPath(points){
   if(!this.planning())return;
-  const old=this.order,kind=['pass','call','one-two'].includes(old?.kind)?old.kind:'run';
-  this.targetMode=null;this.previewOrder({kind,ally:old?.ally,burst:this.burst,path:points});this.refresh();
+  const old=this.order,kind=['pass','call','one-two','tackle'].includes(old?.kind)?old.kind:'run';
+  this.targetMode=null;this.previewOrder({kind,ally:old?.ally,receiveAt:old?.receiveAt,tackle:old?.tackle,tackleAt:old?.tackleAt,burst:this.burst,path:points});this.refresh();
  }
  pass(ally){
   if(!this.planning())return;
   if(ally===this.run.state.ballOwner)return;
   if(this.order?.kind==='pass'&&this.order.ally===ally){this.clear();return;}
   this.targetMode=null;this.burst=false;this.previewOrder({kind:'pass',ally,path:this.order?.kind==='run'?this.order.path:[]});this.refresh();
+ }
+ reception(time){
+  if(!this.planning()||this.order?.kind!=='pass')return;
+  this.previewOrder({...this.order,receiveAt:time});this.refresh();
+ }
+ receptionMarkers(){
+  if(this.order?.kind!=='pass')return [];
+  const id=this.order.ally,a=this.run.state.actors[id],raw=this.support[id];
+  if(!raw?.length)return [];
+  const path=route(a,raw,this.run.runRange);
+  return ACTION_TIMES.map(time=>({time,p:along(path,this.run.runRange*time/2)}));
+ }
+ tackle(kind,time=this.order?.tackleAt??1.5){
+  if(!this.planning()||!this.run.defending)return;
+  const prior=this.order,manual=prior?.kind==='run'&&prior.path?.length||prior?.kind==='tackle'&&!prior.autoTackle;
+  const p=this.run.tacklePointAt(time);
+  this.targetMode=null;this.previewOrder({kind:'tackle',tackle:kind,tackleAt:time,path:manual?prior.path:p?[p]:[],burst:this.burst,autoTackle:!manual});this.refresh();
+ }
+ tackleTiming(time){
+  if(this.order?.kind!=='tackle')return;
+  this.tackle(this.order.tackle,time);
  }
  oneTwo(ally=1){
   if(!this.planning())return;
@@ -177,13 +198,17 @@ export class Sunday{
   if(this.preview&&!this.targetMode){
    if(!this.preview.valid){text=this.preview.error;danger=true;}
    else if(this.preview.type!=='move'&&this.preview.type!=='goal'){text=this.preview.detail;danger=true;}
-   else text=kind==='pass'?'Possession follows the pass.':kind==='one-two'?'Return run ready. Adjust it on the grass.':'Plan ready. Select another player to add a run.';
+   else text=kind==='pass'?(this.preview.delivery?'Arrival '+this.preview.order.receiveAt.toFixed(1)+'s · '+Math.round(this.preview.delivery.speed)+'m/s.':'Automatic lead pass. Choose a reception time below.'):kind==='one-two'?'Return run ready. Adjust it on the grass.':'Plan ready. Select another player to add a run.';
   }
-  const wide=this.landscape,x=wide?R-250*u:L+12*u,y=wide?this.v.top+66*u:B-148*u,panelWidth=wide?238*u:W-24*u,inner=panelWidth-20*u,w=(inner-12*u)/3,bh=wide?38*u:29*u,first=y+(wide?100:65)*u,second=first+bh+6*u;
-  this.rect(x,y,panelWidth,wide?242*u:136*u,C.navy,null);
+  const wide=this.landscape,x=wide?R-250*u:L+12*u,y=wide?this.v.top+66*u:B-210*u,panelWidth=wide?238*u:W-24*u,inner=panelWidth-20*u,w=(inner-12*u)/3,bh=wide?38*u:29*u,first=y+(wide?100:65)*u,second=first+bh+6*u;
+  this.rect(x,y,panelWidth,wide?308*u:198*u,C.navy,null);
   this.label(title,x+10*u,y+8*u,inner,wide?40*u:20*u,14,danger?C.orange:C.yellow);
   this.label(text,x+10*u,y+(wide?50:28)*u,inner,wide?46*u:34*u,12,danger?C.orange:C.cream);
-  if(wide){const planned=Object.keys(this.support).length+(this.order?.path?.length?1:0);this.label(`${planned} RUN${planned===1?'':'S'} QUEUED\n${this.run.state.passes} ONE-TWO${this.run.state.passes===1?'':'S'} LEFT`,x+10*u,second+bh+12*u,inner,45*u,12,C.cyan);}
+  if(kind==='pass'){
+   this.label('RECEIVE AT',x+10*u,second+bh+5*u,inner,15*u,10,C.cyan);
+   const times=[null,...ACTION_TIMES],tw=(inner-4*3*u)/5;
+   times.forEach((time,i)=>this.button(time===null?'AUTO':time.toFixed(1)+'s',x+10*u+i*(tw+3*u),second+bh+21*u,tw,26*u,()=>this.reception(time),true,(this.order.receiveAt??null)===time));
+  }else if(wide){const planned=Object.keys(this.support).length+(this.order?.path?.length?1:0);this.label(`${planned} RUN${planned===1?'':'S'} QUEUED\n${this.run.state.passes} ONE-TWO${this.run.state.passes===1?'':'S'} LEFT`,x+10*u,second+bh+12*u,inner,45*u,12,C.cyan);}
   const hasBall=this.selected===owner;
   this.button(hasBall?'PASS':'CALL',x+10*u,first,w,bh,()=>hasBall?this.target('pass'):this.call(),true,this.targetMode==='pass');
   this.button('1–2',x+10*u+w+6*u,first,w,bh,()=>this.ballAction('one-two'),this.run.state.passes>0,this.targetMode==='one-two');
@@ -193,20 +218,23 @@ export class Sunday{
   this.button('PLAY 2s',x+10*u+2*(w+6*u),second,w,bh,()=>this.play(),!!this.preview?.valid&&!this.targetMode,false,true);
  }
  defenseOrders(){
-  const {left:L,right:R,bottom:B,width:W}=this.v,u=this.u,wide=this.landscape,x=wide?R-250*u:L+12*u,y=wide?this.v.top+66*u:B-148*u,pw=wide?238*u:W-24*u,inner=pw-20*u,w=(inner-12*u)/3,bh=wide?38*u:29*u,first=y+(wide?100:65)*u,second=first+bh+6*u;
-  const a=this.run.state.actors[this.selected],th=this.run.threat,pr=this.preview;
-  const title=(a.id===15?'KEEPER':a.role.toUpperCase())+' · '+th.kind.toUpperCase();
-  const msg=pr?.valid?(pr.type==='regain'?pr.detail:pr.type==='conceded'?'Goal predicted. Try a block or another player.':'Plan set. '+th.detail):pr?.error||th.detail;
-  this.rect(x,y,pw,wide?242*u:136*u,C.navy,null);
+  const {left:L,right:R,bottom:B,width:W}=this.v,u=this.u,wide=this.landscape,x=wide?R-250*u:L+12*u,y=wide?this.v.top+66*u:B-210*u,pw=wide?238*u:W-24*u,inner=pw-20*u,w=(inner-12*u)/3,bh=wide?35*u:27*u,first=y+(wide?100:60)*u,second=first+bh+5*u,third=second+bh+5*u,fourth=third+bh+5*u;
+  const a=this.run.state.actors[this.selected],th=this.run.threat,pr=this.preview,challenge=this.order?.kind==='tackle',recovery=this.run.state.tackleRecovery?.[a.id]>0;
+  const title=(a.id===15?'KEEPER':a.role.toUpperCase())+' · '+(recovery?'RECOVERING':challenge?this.order.tackle.toUpperCase()+' '+this.order.tackleAt.toFixed(1)+'s':this.run.state.freeKick?'FREE KICK':th.kind.toUpperCase());
+  const msg=pr?.valid?(pr.type==='regain'||pr.tackleOutcome||pr.type==='foul'?pr.detail:pr.type==='conceded'?'Goal predicted. Try a block or another player.':'Plan set. '+th.detail):pr?.error||(this.run.state.freeKick?'Free kick. Intercept the pass or block the shot.':this.run.message+' '+th.detail);
+  this.rect(x,y,pw,wide?308*u:198*u,C.navy,null);
   this.label(title,x+10*u,y+8*u,inner,wide?40*u:20*u,14,C.orange);
-  this.label(msg,x+10*u,y+(wide?50:28)*u,inner,wide?46*u:34*u,12,pr?.type==='regain'?C.cyan:C.cream);
-  this.button('PRESS',x+10*u,first,w,bh,()=>this.defend(false));
+  this.label(msg,x+10*u,y+(wide?50:28)*u,inner,wide?46*u:32*u,12,pr?.type==='regain'?C.cyan:pr?.type==='foul'?C.red:C.cream);
+  this.button('PRESS',x+10*u,first,w,bh,()=>this.defend(false),true,this.order?.kind==='run');
   this.button('COVER',x+10*u+w+6*u,first,w,bh,()=>this.defend(true));
-  this.button('HOLD',x+10*u+2*(w+6*u),first,w,bh,()=>this.hold());
-  this.button('SPRINT '+this.run.state.bursts,x+10*u,second,w,bh,()=>this.sprint(),this.run.state.bursts>0,this.burst);
-  this.button('REWIND',x+10*u+w+6*u,second,w,bh,()=>this.rewind(),!!this.run.before&&this.run.rewinds>0);
-  this.button('PLAY 2s',x+10*u+2*(w+6*u),second,w,bh,()=>this.play(),!!pr?.valid,false,true);
-  if(wide)this.label('ORANGE: OPPOSITION\nCYAN: YOUR SUPPORT RUNS',x+10*u,second+bh+12*u,inner,42*u,11,C.cyan);
+  this.button('SPRINT '+this.run.state.bursts,x+10*u+2*(w+6*u),first,w,bh,()=>this.sprint(),this.run.state.bursts>0,this.burst);
+  this.button('STAND',x+10*u,second,w,bh,()=>this.tackle('stand'),a.id!==15&&!recovery,challenge&&this.order.tackle==='stand');
+  this.button('SLIDE',x+10*u+w+6*u,second,w,bh,()=>this.tackle('slide'),a.id!==15&&!recovery,challenge&&this.order.tackle==='slide');
+  this.button('HOLD',x+10*u+2*(w+6*u),second,w,bh,()=>this.hold());
+  if(challenge){const tw=(inner-9*u)/4;ACTION_TIMES.forEach((time,i)=>this.button(time.toFixed(1)+'s',x+10*u+i*(tw+3*u),third,tw,bh,()=>this.tackleTiming(time),true,time===this.order.tackleAt));}
+  else this.label('Stand: safe reach. Slide: longer, foul risk.',x+10*u,third+3*u,inner,bh,11,C.cyan);
+  this.button('REWIND',x+10*u,fourth,w,bh,()=>this.rewind(),!!this.run.before&&this.run.rewinds>0);
+  this.button('PLAY 2s',x+10*u+w+6*u,fourth,2*w+6*u,bh,()=>this.play(),!!pr?.valid,false,true);
  }
  drawPlans(){
   const u=this.u,local=p=>{const q=this.point(p);return {x:q.x-this.v.left,y:q.y-this.v.top};};
@@ -218,10 +246,13 @@ export class Sunday{
   const p=this.preview?.valid?this.preview.order:this.order;
   if(p.kind==='shot')draw([this.run.state.ball,p.target],C.yellow,true);
   else{
-   const budget=this.run.runRange+(this.burst?7:0)+(p.kind==='one-two'?2:0),path=route(this.run.state.actors[this.selected],p.path,budget),end=this.point(path.at(-1));
+   const budget=p.budget??(this.run.runRange+(this.burst?7:0)+(p.kind==='one-two'?2:0)),path=route(this.run.state.actors[this.selected],p.path,budget),end=this.point(path.at(-1));
    draw(path,C.yellow);this.ghost.isVisible=true;this.ghost.x=end.x;this.ghost.y=end.y;this.ghost.width=this.ghost.height=this.scale*4.2;
    if(this.preview?.passPoints&&!this.run.defending)draw(this.preview.passPoints,C.cyan,true);
   }
+  for(const mark of this.receptionMarkers()){const q=local(mark.p),chosen=this.order.receiveAt===mark.time;this.plans.outlineEllipse(q.x,q.y,(chosen?7:4)*u,(chosen?7:4)*u,chosen?C.yellow:C.cyan,1.5*u,false);}
+  if(this.preview?.delivery){const q=local(this.preview.delivery.target);this.plans.outlineEllipse(q.x,q.y,7*u,7*u,C.yellow,2*u,false);}
+  if(this.order?.kind==='tackle'){const tp=this.run.tacklePointAt(this.order.tackleAt);if(tp){const q=local(tp);this.plans.outlineEllipse(q.x,q.y,(this.order.tackle==='slide'?3.7:2.1)*this.scale,(this.order.tackle==='slide'?3.7:2.1)*this.scale,C.yellow,1.5*u,false);}}
   if(this.preview?.point){const p=local(this.preview.point),r=5*u;this.plans.line(p.x-r,p.y-r,p.x+r,p.y+r,C.red,2*u);this.plans.line(p.x-r,p.y+r,p.x+r,p.y-r,C.red,2*u);}
  }
  drawTargets(){
@@ -269,7 +300,7 @@ export class Sunday{
   // Modal controls take precedence over pitch hit targets.
   this.buttons=[];const help=this.modal==='help',{x,y,w,h,u}=this.panel(510,help?520:350);
   this.label(help?'THE QUICK TEAM TALK':'THE CLUB SHED',x+20*u,y+18*u,w-40*u,38*u,23,C.yellow);
-  if(help)this.label('SELECT: tap any home player, including the keeper.\nRUN: tap grass, or drag from the ring.\nSelect another player to queue a second run.\nPASS: choose a teammate. Control follows the ball.\nCALL: receive with an off-ball player.\n1–2: choose a teammate for a return run.\nSHOOT: choose a goal corner with the ball carrier.\nOrange paths show their intentions.\nWithout the ball: PRESS, COVER or HOLD.\nTackle or intercept to counter-attack.\nWin the match, not just a single chance.\n\nSpace: play · Tab: next player\nP: pass/call · O: one-two · B: sprint\nArrows/WASD: run · Q/E: diagonal\nR: rewind · 1/2: aim · C: learned dink\nEnter: continue · Escape: cancel',x+20*u,y+67*u,w-40*u,h-124*u,13);
+  if(help)this.label('SELECT: tap any home player, including the keeper.\nRUN: tap grass, or drag from the ring.\nSelect another player to queue a second run.\nPASS: choose a teammate. Control follows the ball.\nCALL: receive with an off-ball player.\n1–2: choose a teammate for a return run.\nSHOOT: choose a goal corner with the ball carrier.\nOrange paths show their intentions.\nPlan a receiver run, select the passer, PASS;\nchoose AUTO or 0.5–2s to time reception.\nPRESS approaches, STAND (T) or SLIDE (F) challenges.\nChoose challenge time; slides risk fouls.\nCOVER / HOLD to intercept or block.\nWin the match, not just a single chance.\n\nSpace: play · Tab: next player\nP: pass/call · O: one-two · B: sprint\nArrows/WASD: run · Q/E: diagonal\nR: rewind · 1/2: aim · C: learned dink\nEnter: continue · Escape: cancel',x+20*u,y+67*u,w-40*u,h-124*u,13);
   else{
    this.label(`CLUB KITTY: £${this.profile.kitty}\nUpgrades apply to the next run.`,x+20*u,y+67*u,w-40*u,52*u,14);
    Object.entries(UPGRADES).forEach(([id,a],i)=>{this.label(`${a.name}\n${a.text}`,x+20*u,y+(135+i*70)*u,w-135*u,56*u,13);this.button(this.profile[id]>=a.max?'SORTED':`£${a.price}`,x+w-100*u,y+(139+i*70)*u,80*u,34*u,()=>{if(purchase(this.profile,id)){saveProfile(this.storage,this.profile);this.refresh();}},this.profile[id]<a.max&&this.profile.kitty>=a.price);});
@@ -296,6 +327,7 @@ export class Sunday{
   if(!this.planning())return;
   const p=this.ground(x,y);
   if(!d.moved){
+   if(!this.targetMode&&this.order?.kind==='pass'){const markers=this.receptionMarkers().sort((a,b)=>distance(a.p,p)-distance(b.p,p));if(markers.length&&distance(markers[0].p,p)<Math.max(1.2,7*this.u/this.scale)){this.reception(markers[0].time);return;}}
    if(this.targetMode==='shot'){if(p.z<-40&&Math.abs(p.x)<10)this.aim(p.x);return;}
    const a=HOME_IDS.map(id=>this.run.state.actors[id]).sort((a,b)=>distance(p,a)-distance(p,b))[0];
    if(distance(p,a)<Math.max(3.4,9*this.u/this.scale)){
@@ -320,6 +352,7 @@ export class Sunday{
   const directions={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0],q:[-1,-1],e:[1,-1]};
   if(directions[k])this.directional(...directions[k]);else if(k===' ')this.play();else if(k==='tab'){e.preventDefault?.();this.select(HOME_IDS[(HOME_IDS.indexOf(this.selected)+(e.shiftKey?7:1))%8]);}else if(k==='p'){if(this.run.defending)this.defend(false);else if(this.selected===this.run.state.ballOwner)this.target('pass');else this.call();}
   else if(k==='o'){if(this.run.defending)this.defend(true);else this.ballAction('one-two');}else if(k==='h')this.hold();else if(k==='b')this.sprint();else if((k==='1'||k==='2')&&!this.run.defending){if(this.selected!==this.run.state.ballOwner)this.select(this.run.state.ballOwner);this.aim(k==='1'?-5.8:5.8);}
+  else if(k==='t'&&this.run.defending)this.tackle('stand');else if(k==='f'&&this.run.defending)this.tackle('slide');
   else if(k==='c')this.dink();
   else if(k==='escape')this.clear();
  }
