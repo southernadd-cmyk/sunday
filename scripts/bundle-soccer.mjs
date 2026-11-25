@@ -173,6 +173,8 @@ const resumeFile='kernel/providers/simulator/set_piece_resume.js';
 let resume=git('show','HEAD:'+resumeFile);
 resume=patch(resume,'function resolveSetPieceTaker(sim, resumeType) {', `function resolveSetPieceTaker(sim, resumeType) {
   if (resumeType === 'freekick' && sim.sundayFreekickTaker && !sim.sundayFreekickTaker.isSentOff) return sim.sundayFreekickTaker;`);
+resume=patch(resume,"const { PlayerStates } = require('../../core/entities/player.js');", `const { PlayerStates } = require('../../core/entities/player.js');
+const { isPassSafeFromAllOpponents, estimatePassGroundSpeed } = require('../../core/lib/pass_safety.js');`);
 const fkStart=resume.indexOf("} else if (resumeType === 'freekick') {");
 const fkEnd=resume.indexOf("} else if (resumeType === 'throwin') {",fkStart);
 if(fkStart<0||fkEnd<0)throw Error('Pinned free-kick branch missing');
@@ -183,6 +185,23 @@ fk=patch(fk,'if (!isIndirect && distToGoal < shootRange) {','if (!isIndirect && 
 fk=patch(fk,'willShoot = freekickShouldShoot(playbook, !!(shotResult && shotResult.ok), distToGoal, shootRange);','willShoot = compact ? !!shotResult?.ok : freekickShouldShoot(playbook, !!(shotResult && shotResult.ok), distToGoal, shootRange);');
 fk=patch(fk,"let passType = kickPrefs.passType === 'long' ? 'long' : 'short';","let passType = !compact && kickPrefs.passType === 'long' ? 'long' : 'short';");
 fk=patch(fk,"if (!target && passType === 'short') {","if (!target && passType === 'short' && !compact) {");
+fk=patch(fk,'let target = null;', `let target = null;
+      let compactAim = null;
+      if (compact) {
+        const from = {x:taker.x,y:taker.y};
+        const opponents = squad?.getOpponentPool?.() || sim.players.filter(p=>p.team!==taker.team&&!p.isSentOff);
+        const options = teammatesList.map(p=>{
+          const aim={x:p.x,y:p.y};
+          const distance=Math.hypot(p.x-from.x,p.y-from.y);
+          const speed=estimatePassGroundSpeed(from,aim,taker,'short');
+          const safe=isPassSafeFromAllOpponents(from,aim,p,opponents,speed);
+          const clearance=Math.min(...opponents.map(o=>Math.hypot(o.x-p.x,o.y-p.y)));
+          return {p,aim,safe,score:Math.min(8,clearance)*.4-distance+(safe?100:0)};
+        }).sort((a,b)=>b.score-a.score);
+        if(options.length){target=options[0].p;compactAim=options[0].aim;}
+      }`);
+fk=patch(fk,"if (squad && typeof squad.pickBestSafePassTarget === 'function') {","if (!compact && squad && typeof squad.pickBestSafePassTarget === 'function') {");
+fk=patch(fk,"taker.passAim = (squad && typeof squad.getBestPassToReceiver === 'function')","taker.passAim = compact ? compactAim : (squad && typeof squad.getBestPassToReceiver === 'function')");
 fk=patch(fk,'} else if (isIndirect) {','} else if (isIndirect || compact) {');
 fk += `  if (sim.sundayOnFreekickChoice) {
       const shooting = taker.fsm.getNameOfCurrentState().toLowerCase() === 'shoot';
