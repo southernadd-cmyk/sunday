@@ -93,9 +93,18 @@ test('a learned dink is available on touch controls and cannot leak into a fresh
 });
 
 test('any outfielder can shoot, pass back to the striker, and receive a one-two',()=>{
- const g=new Sunday(runtime());const r=g.run;r.state.ballOwner=1;r.state.actors[1].x=0;r.state.actors[1].z=-32;r.state.ball={x:.5,z:-33,y:.6};r.intents=r.makeIntents();
+ const g=new Sunday(runtime());const r=g.run;r.state.ballOwner=1;r.state.actors[1].x=0;r.state.actors[1].z=-32;r.state.actors[0].x=-10;r.state.actors[0].z=-15;r.state.ball={x:.5,z:-33,y:.6};r.intents=r.makeIntents();
  assert.ok(r.preview({kind:'shot',actor:1,target:{x:5}}).valid);
  assert.ok(r.preview({kind:'pass',actor:1,ally:0,path:[]}).valid);
  assert.ok(r.suggestOneTwo(0,{actor:1}));
  assert.equal(r.preview({kind:'shot',actor:0,target:{x:5}}).valid,false);
+});
+
+test('desktop camera rotates the pitch and maps input consistently',()=>{
+ const g=new Sunday(runtime());assert.equal(g.landscape,true);assert.equal(g.pitch.angle,Math.PI/2);
+ for(const p of [{x:-34,z:-47},{x:34,z:47},{x:12,z:5}]){
+  const q=g.point(p),a=g.ground(q.x,q.y);assert.ok(distance(a,p)<1e-8);
+ }
+ assert.ok(g.point({x:0,z:-47}).x>g.point({x:0,z:47}).x);
+ click(g,'STEP ONTO THE PITCH');g.key({key:'arrowright'});assert.ok(g.order.path[0].z<g.run.state.actors[0].z);
 });

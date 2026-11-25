@@ -29,14 +29,24 @@ export class Sunday{
  resize(){
   this.v=this.field.getViewport();const a=this.field.layerToCssPx(this.v.left,this.v.top),b=this.field.layerToCssPx(this.v.left+1,this.v.top);
   this.u=1/Math.max(.01,Math.abs(b[0]-a[0]));this.narrow=this.v.width/this.v.height<1;
-  this.scale=Math.max(.1,Math.min(this.v.width/88,(this.v.height-216*this.u)/110));this.top=this.v.top+62*this.u+6*this.scale;this.cx=this.v.left+this.v.width/2;
-  Object.assign(this.pitch,{x:this.cx-44*this.scale,y:this.top-6*this.scale,width:88*this.scale,height:110*this.scale});
+  const {left:L,top:T,width:W,height:H}=this.v,u=this.u;
+  this.landscape=W/u>=740&&W/H>=1.25;
+  const fieldWidth=W-(this.landscape?258*u:0);
+  this.cx=L+fieldWidth/2;
+  this.scale=Math.max(.1,this.landscape?Math.min((fieldWidth-16*u)/110,(H-72*u)/88):Math.min((W-8*u)/88,(H-216*u)/110));
+  if(this.landscape){
+   this.pitchRight=this.cx+55*this.scale;this.pitchTop=T+62*u+(H-72*u-88*this.scale)/2;
+   Object.assign(this.pitch,{x:this.pitchRight,y:this.pitchTop,width:88*this.scale,height:110*this.scale,angle:Math.PI/2});
+  }else{
+   this.top=T+62*u+6*this.scale+(H-216*u-110*this.scale)/2;
+   Object.assign(this.pitch,{x:this.cx-44*this.scale,y:this.top-6*this.scale,width:88*this.scale,height:110*this.scale,angle:0});
+  }
   for(const canvas of [this.plans,this.canvas]){canvas.x=this.v.left;canvas.y=this.v.top;canvas.width=this.v.width;canvas.height=this.v.height;}
   if(this.anim)this.drawFrame(this.anim.result,Math.min(1,this.anim.elapsed/this.anim.duration));else this.updateActors();
   this.refresh();
  }
- point(p){return {x:this.cx+p.x*this.scale,y:this.top+(p.z+49)*this.scale};}
- ground(x,y){return {x:(x-this.cx)/this.scale,z:(y-this.top)/this.scale-49};}
+ point(p){return this.landscape?{x:this.pitchRight-(p.z+55)*this.scale,y:this.pitchTop+(p.x+44)*this.scale}:{x:this.cx+p.x*this.scale,y:this.top+(p.z+49)*this.scale};}
+ ground(x,y){return this.landscape?{x:(y-this.pitchTop)/this.scale-44,z:(this.pitchRight-x)/this.scale-55}:{x:(x-this.cx)/this.scale,z:(y-this.top)/this.scale-49};}
  planning(){return !this.intro&&!this.modal&&!this.busy&&this.run.phase==='planning';}
  clear(refresh=true){this.order=null;this.preview=null;this.burst=false;this.support={};this.targetMode=null;if(refresh)this.refresh();}
   previewOrder(order){this.order={...order,actor:this.selected,support:{...this.support}};this.preview=this.run.preview(this.order);}
@@ -74,6 +84,7 @@ export class Sunday{
  aim(x){if(!this.planning())return;this.targetMode=null;this.burst=false;this.previewOrder({kind:'shot',target:{x,z:GOAL.z},chip:this.chip});this.refresh();}
  dink(){if(!this.planning()||!this.run.buffs.chip)return;this.chip=!this.chip;if(this.order?.kind==='shot')this.aim(this.order.target.x);else this.refresh();}
  directional(dx,dz){
+  if(this.landscape)[dx,dz]=[dz,-dx];
   const p=this.run.state.actors[this.selected],budget=this.run.runRange+(this.burst?7:0)+(this.order?.kind==='one-two'?2:0),length=Math.hypot(dx,dz);
   this.planPath([{x:p.x+dx/length*budget,z:p.z+dz/length*budget}]);
  }
@@ -106,7 +117,7 @@ export class Sunday{
  }
  placeActor(i,x,z,frame=0){
   const p=this.point({x,z}),a=this.actors[i],team=this.run.state.actors[i].team;
-  a.x=Math.round(p.x);a.y=Math.round(p.y);a.width=a.height=Math.round(4.2*this.scale);
+  a.x=Math.round(p.x);a.y=Math.round(p.y);a.width=a.height=Math.max(Math.round(4.2*this.scale),Math.round(15*this.u));
   const animation=['Home','Away','Keeper','Official'][team];if(a.animationName!==animation)a.setAnimation(animation);a.animationFrame=frame;
   this.displayPositions[i]={x:a.x,y:a.y};
   if(i===this.selected){this.ring.x=a.x;this.ring.y=a.y;this.ring.width=5.3*this.scale;this.ring.height=3.1*this.scale;}
@@ -148,7 +159,7 @@ export class Sunday{
   this.button('?',R-38*u,T+18*u,24*u,30*u,()=>{this.modal='help';this.refresh();},!this.busy);
   if(this.planning()){this.drawPlans();this.drawTargets();this.orders();}
   else if(!this.intro&&!this.modal&&!this.busy&&this.run.phase==='pickup')this.pickupUi();
-  if(this.busy)this.label('Watch the run…',L+W*.25,B-110*u,W*.5,25*u,14,C.cream,'center');
+  if(this.busy)this.label('BALL IN PLAY',this.landscape?R-250*u:L+W*.25,this.landscape?T+82*u:B-110*u,this.landscape?238*u:W*.5,25*u,14,C.cream,'center');
   if(this.intro)this.introUi();else if(!this.busy&&['goal','setback','over','champion'].includes(this.run.phase))this.resultUi();
   if(this.modal)this.modalUi();
   for(let i=this.labelCount;i<this.labels.length;i++)this.labels[i].isVisible=false;
@@ -164,17 +175,18 @@ export class Sunday{
    else if(this.preview.type!=='move'&&this.preview.type!=='goal'){text=this.preview.detail;danger=true;}
    else text=kind==='pass'?'Possession follows the pass.':kind==='one-two'?'Return run ready. Adjust it on the grass.':'Plan ready. Select another player to add a run.';
   }
-  const y=B-148*u,inner=W-44*u,w=(inner-12*u)/3,bh=29*u,first=y+65*u,second=first+35*u;
-  this.rect(L+12*u,y,W-24*u,136*u,C.navy,null);
-  this.label(title,L+22*u,y+7*u,inner,20*u,14,danger?C.orange:C.yellow);
-  this.label(text,L+22*u,y+28*u,inner,34*u,12,danger?C.orange:C.cream);
+  const wide=this.landscape,x=wide?R-250*u:L+12*u,y=wide?this.v.top+66*u:B-148*u,panelWidth=wide?238*u:W-24*u,inner=panelWidth-20*u,w=(inner-12*u)/3,bh=wide?38*u:29*u,first=y+(wide?100:65)*u,second=first+bh+6*u;
+  this.rect(x,y,panelWidth,wide?242*u:136*u,C.navy,null);
+  this.label(title,x+10*u,y+8*u,inner,wide?40*u:20*u,14,danger?C.orange:C.yellow);
+  this.label(text,x+10*u,y+(wide?50:28)*u,inner,wide?46*u:34*u,12,danger?C.orange:C.cream);
+  if(wide){const planned=Object.keys(this.support).length+(this.order?.path?.length?1:0);this.label(`${planned} RUN${planned===1?'':'S'} QUEUED\n${this.run.state.passes} ONE-TWO${this.run.state.passes===1?'':'S'} LEFT`,x+10*u,second+bh+12*u,inner,45*u,12,C.cyan);}
   const hasBall=this.selected===owner;
-  this.button(hasBall?'PASS':'CALL',L+22*u,first,w,bh,()=>hasBall?this.target('pass'):this.call(),true,this.targetMode==='pass');
-  this.button('1–2',L+22*u+w+6*u,first,w,bh,()=>this.ballAction('one-two'),this.run.state.passes>0,this.targetMode==='one-two');
-  this.button(this.chip?'DINK':'SHOOT',L+22*u+2*(w+6*u),first,w,bh,()=>this.ballAction('shot'),true,this.targetMode==='shot');
-  this.button('SPRINT '+this.run.state.bursts,L+22*u,second,w,bh,()=>this.sprint(),this.run.state.bursts>0,this.burst);
-  this.button('REWIND',L+22*u+w+6*u,second,w,bh,()=>this.rewind(),!!this.run.before&&this.run.rewinds>0);
-  this.button('PLAY 2s',L+22*u+2*(w+6*u),second,w,bh,()=>this.play(),!!this.preview?.valid&&!this.targetMode,false,true);
+  this.button(hasBall?'PASS':'CALL',x+10*u,first,w,bh,()=>hasBall?this.target('pass'):this.call(),true,this.targetMode==='pass');
+  this.button('1–2',x+10*u+w+6*u,first,w,bh,()=>this.ballAction('one-two'),this.run.state.passes>0,this.targetMode==='one-two');
+  this.button(this.chip?'DINK':'SHOOT',x+10*u+2*(w+6*u),first,w,bh,()=>this.ballAction('shot'),true,this.targetMode==='shot');
+  this.button('SPRINT '+this.run.state.bursts,x+10*u,second,w,bh,()=>this.sprint(),this.run.state.bursts>0,this.burst);
+  this.button('REWIND',x+10*u+w+6*u,second,w,bh,()=>this.rewind(),!!this.run.before&&this.run.rewinds>0);
+  this.button('PLAY 2s',x+10*u+2*(w+6*u),second,w,bh,()=>this.play(),!!this.preview?.valid&&!this.targetMode,false,true);
  }
  drawPlans(){
   const u=this.u,local=p=>{const q=this.point(p);return {x:q.x-this.v.left,y:q.y-this.v.top};};
@@ -202,8 +214,8 @@ export class Sunday{
     this.label(name,p.x-25*u,p.y+3*u,50*u,14*u,10,active?C.yellow:C.cream,'center');
    }
   }
-  if(this.targetMode==='shot'&&this.run.buffs.chip)this.button(this.chip?'DINK ON':'DINK',this.v.right-102*u,this.v.top+64*u,90*u,28*u,()=>this.dink(),true,this.chip);
-  if(this.targetMode==='shot')for(const x of [-5.8,5.8]){const p=this.point({x,z:-47});this.button(x<0?'LEFT':'RIGHT',p.x-23*u,p.y-22*u,46*u,22*u,()=>this.aim(x));}
+  if(this.targetMode==='shot'&&this.run.buffs.chip)this.button(this.chip?'DINK ON':'DINK',this.v.right-102*u,this.landscape?this.v.top+324*u:this.v.top+64*u,90*u,28*u,()=>this.dink(),true,this.chip);
+  if(this.targetMode==='shot')for(const x of [-5.8,5.8]){const p=this.point({x,z:-47});this.button(this.landscape?(x<0?'HIGH':'LOW'):(x<0?'LEFT':'RIGHT'),p.x-(this.landscape?0:23*u),p.y-22*u,46*u,22*u,()=>this.aim(x));}
  }
  panel(width,height){const u=this.u,v=this.v,w=Math.min(width*u,v.width-26*u),h=Math.min(height*u,v.height-170*u),x=v.left+(v.width-w)/2,y=v.top+(v.height-h)/2;this.rect(x,y,w,h);return {x,y,w,h,u};}
  introUi(){

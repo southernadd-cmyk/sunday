@@ -20,7 +20,7 @@ All seven home outfield players are selectable. Time waits while you plan.
 - Press PLAY 2s. Everyone moves together, then the pitch freezes again.
 - Tab cycles players; P pass/call, O one-two, Space play, B sprint, R rewind, arrows/WASD run, 1/2 shoot, C learned dink, Escape clears the plan.
 
-The full pitch is visible, with a fixed compact command deck rather than floating action buttons. This remains an attacking-chance roguelite, not a full two-way match simulation.
+The full pitch is visible, horizontal on desktop and vertical on narrow screens, with a fixed compact command deck rather than floating action buttons. The build repaints the recreation ground and footballer sprites with original pixel art, preserving the native atlas frame geometry. Run `python3 scripts/refine-construct-art.py` to refresh the editable source art before opening the folder project; the published `.c3p` is packed after this step. This remains an attacking-chance roguelite, not a full two-way match simulation.
 
 Four fixtures, three legs, kit pickups, club upgrades and profile migration are included. Only club progress is saved; refreshing ends an active run. Sound is not included in this first Construct port.
 
