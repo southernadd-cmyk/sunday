@@ -15,7 +15,13 @@ export function possessionIntent(previous,ctx){
  if(depth>=.60&&forwardPass)return 'combine';
  return 'progress';
 }
-export function possessionAction(intent,ctx){
+export function possessionAction(intent,ctx,system='diamond'){
+ // Each system still requires a safe option from the actual engine.
+ if(system==='direct'&&ctx.clearShot&&ctx.depth>=.70)return 'shoot';
+ if(system==='press'&&ctx.forwardPass&&ctx.depth>.40)return 'pass';
+ if(system==='counter'&&ctx.forwardPass&&ctx.breaksLine)return 'pass';
+ if(system==='wide'&&ctx.forwardPass&&ctx.depth>.45)return 'pass';
+ if(system==='rotation'&&ctx.forwardPass&&ctx.depth>.50)return 'pass';
  if(intent==='finish'&&ctx.clearShot)return 'shoot';
  if(ctx.forwardPass&&(intent==='build'||intent==='combine'||ctx.pressure||ctx.breaksLine))return 'pass';
  if(intent==='recover'&&ctx.backwardPass)return 'pass';
