@@ -84,8 +84,8 @@ def footballer(team,frame):
         return p
     # Feet move in the direction of travel, four poses including crossing.
     # Side-on frames have a narrower torso; front/back distinguish head and kit.
-    phase=(0,2,0,-2)[pose-1] if pose else 0
-    cross=(0,1,0,-1)[pose-1] if pose else 0
+    phase=(1,2,-1,-2)[pose-1] if pose else 0
+    cross=(1,0,-1,0)[pose-1] if pose else 0
     side=abs(dx)==1 and dy==0
     cx=8;bodyw=4 if side else 6
     bob=1 if pose in (2,4) else 0
