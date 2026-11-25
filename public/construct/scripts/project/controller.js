@@ -1,5 +1,6 @@
 // SUNDAY: native Construct autoplay presentation. Match logic stays in engine.js.
-import {AutoMatch,AUTO_TRAITS,AUTO_STEP} from './engine.js';
+import {createSoccerMatch,AUTO_TRAITS,SOCCER_STEP} from './engine.js';
+const SIM_DURATION=300,BASE_PLAYBACK=4;
 const C={navy:[.09,.15,.25,.96],yellow:[1,.88,.35,1],cream:[.96,.96,.82,1],cyan:[.64,.9,.87,1],orange:[1,.66,.36,.8],red:[1,.39,.3,1],clear:[0,0,0,0]};
 const rgb=c=>c.slice(0,3);
 const randomSeed=()=>crypto.getRandomValues(new Uint32Array(1))[0];
@@ -7,6 +8,7 @@ export class Sunday{
  constructor(runtime){
   this.runtime=runtime;this.field=runtime.layout.getLayer('Pitch');this.hud=runtime.layout.getLayer('HUD');
   this.pitch=runtime.objects.Pitch.getFirstInstance();this.actors=[...runtime.objects.Footballer.instances()];
+  while(this.actors.length<22)this.actors.push(runtime.objects.Footballer.createInstance('Pitch',0,0));
   this.ball=runtime.objects.Ball.getFirstInstance();this.ring=runtime.objects.StrikerRing.getFirstInstance();this.ghost=runtime.objects.Ghost.getFirstInstance();
   this.plans=runtime.objects.Plans.getFirstInstance();this.canvas=runtime.objects.HudCanvas.getFirstInstance();this.pickups=[...runtime.objects.Pickup.instances()];
   this.labels=[...runtime.objects.Label.instances()];this.buttons=[];this.labelCount=0;this.displayPositions=[];this.auto=null;this.drag=null;this.intro=true;this.menuPage='main';
@@ -26,14 +28,19 @@ export class Sunday{
   // Seeded rotation of the six available team behaviours; all are selectable across a run.
   const start=(s.seed+s.round*7)%remaining.length;s.offers=remaining.slice(start).concat(remaining.slice(0,start)).slice(0,3);
  }
- autoChoose(id){
+ async autoChoose(id){
   const s=this.auto;if(!s||s.phase!=='draft'||!s.offers.includes(id))return;
-  s.traits.push(id);s.match=new AutoMatch((s.seed+s.round*7919)>>>0,s.traits,s.round);s.phase='match';s.paused=false;s.acc=0;s.hud=0;s.last=performance.now();this.drawAuto();this.refresh();
+  s.phase='loading';s.error=null;this.refresh();
+  try{
+   const traits=[...s.traits,id],match=await createSoccerMatch((s.seed+s.round*7919)>>>0,traits,s.round,SIM_DURATION);
+   if(this.auto!==s)return;
+   s.traits=traits;s.match=match;s.phase='match';s.paused=false;s.acc=0;s.hud=0;s.last=performance.now();this.drawAuto();this.refresh();
+  }catch(error){if(this.auto!==s)return;s.phase='draft';s.error='Could not start match. Choose again.';console.error('Soccer-JS startup:',error);this.refresh();}
  }
  advanceAuto(dt){
   const s=this.auto;if(!s||s.phase!=='match'||s.paused)return;
-  s.acc+=Math.max(0,dt)*s.speed;
-  while(s.acc>=AUTO_STEP&&!s.match.finished){s.match.step();s.acc-=AUTO_STEP;}
+  s.acc+=Math.max(0,dt)*s.speed*BASE_PLAYBACK;
+  while(s.acc>=SOCCER_STEP&&!s.match.finished){s.match.step();s.acc-=SOCCER_STEP;}
   this.drawAuto();s.hud+=dt;
   if(s.match.finished){s.results.push([...s.match.score]);s.phase='result';this.refresh();}
   else if(s.hud>=.2){s.hud=0;this.refresh();}
@@ -49,19 +56,22 @@ export class Sunday{
  drawAuto(){
   const m=this.auto?.match;if(!m)return;
   this.ring.isVisible=false;
-  for(const a of m.actors)this.placeActor(a.id,a.x,a.z,Math.floor(m.time*7+a.id)%2);
+  for(const a of m.actors){this.placeActor(a.id,a.x,a.z,a.frame);this.actors[a.id].isVisible=a.visible!==false;}
   for(const a of [...this.actors].sort((a,b)=>a.y-b.y))a.moveToTop();this.placeBall(m.ball);
  }
  autoUi(){
   const s=this.auto,m=s.match,{left:L,top:T,right:R,bottom:B,width:W,height:H}=this.v,u=this.u;
   const opponent=['RAILWAY','MUNICIPAL','DOG & DUCK'][s.round];
+  if(s.phase==='loading'){
+   this.rect(L,T,W,H,[.055,.105,.16,1],null);this.label('PREPARING MATCH',L+20*u,T+H*.44,W-40*u,42*u,24,C.yellow,'center');return;
+  }
   if(s.phase==='draft'){
    this.rect(L,T,W,H,[.055,.105,.16,.97],null);
    const w=Math.min(520*u,W-28*u),x=L+(W-w)/2,y=T+Math.max(12*u,(H-360*u)/2),rh=Math.min(66*u,(H-145*u)/4);
    this.label('BUILD THE TEAM',x,y,w,42*u,29,C.yellow);
    this.label('MATCH '+(s.round+1)+'/3 · '+opponent+' · CHOOSE ONE BEHAVIOUR',x,y+43*u,w,28*u,12,C.cyan);
    s.offers.forEach((id,i)=>{const g=AUTO_TRAITS[id],yy=y+76*u+i*rh;this.button(g.name.toUpperCase(),x,yy,w,29*u,()=>this.autoChoose(id));this.label(g.detail,x+4*u,yy+31*u,w-8*u,rh-31*u,12,C.cream);});
-   this.label('ACTIVE: '+(s.traits.map(id=>AUTO_TRAITS[id].name).join(' + ')||'None yet'),x,y+79*u+3*rh,w,32*u,12,C.cyan);
+   this.label(s.error||'ACTIVE: '+(s.traits.map(id=>AUTO_TRAITS[id].name).join(' + ')||'None yet'),x,y+79*u+3*rh,w,32*u,12,C.cyan);
    this.button('BACK TO MENU',x,y+112*u+3*rh,w,32*u,()=>this.exitAuto());return;
   }
   const elapsed=Math.min(90,Math.floor(m.time/m.duration*90)),clock=String(elapsed).padStart(2,'0')+':'+String(Math.floor((m.time/m.duration*90-elapsed)*60)).padStart(2,'0');
@@ -115,7 +125,7 @@ export class Sunday{
 
  placeActor(i,x,z,frame=0){
   const p=this.point({x,z}),a=this.actors[i],team=this.auto.match.actors[i].team;
-  a.x=Math.round(p.x);a.y=Math.round(p.y);a.width=a.height=Math.max(Math.round(4.2*this.scale),Math.round(15*this.u));
+  a.x=Math.round(p.x);a.y=Math.round(p.y);a.width=a.height=Math.max(Math.round(3.5*this.scale),Math.round(12*this.u));
   const animation=['Home','Away','Keeper','Official'][team];if(a.animationName!==animation)a.setAnimation(animation);a.animationFrame=frame;
   this.displayPositions[i]={x:a.x,y:a.y};
  }
@@ -140,8 +150,8 @@ export class Sunday{
   if(!this.v)return;
   this.canvas.clearCanvas(C.clear);this.plans.clearCanvas(C.clear);this.ring.isVisible=false;this.ghost.isVisible=false;this.buttons=[];this.labelCount=0;
   for(const p of this.pickups)p.isVisible=false;
-  const visible=!!this.auto?.match&&this.auto.phase!=='draft';
-  for(const a of this.actors)a.isVisible=visible&&a!==this.actors[17]&&a!==this.actors[18]&&a!==this.actors[19];this.ball.isVisible=visible;this.pitch.isVisible=visible;
+  const visible=!!this.auto?.match&&['match','result'].includes(this.auto.phase);
+  for(let i=0;i<this.actors.length;i++)this.actors[i].isVisible=visible&&!!this.auto.match.actors[i]&&this.auto.match.actors[i].visible!==false;this.ball.isVisible=visible;this.pitch.isVisible=visible;
   if(this.auto)this.autoUi();else this.introUi();
   for(let i=this.labelCount;i<this.labels.length;i++)this.labels[i].isVisible=false;
  }
@@ -163,7 +173,7 @@ export class Sunday{
   }else{
    this.button('NEW CAREER',x,y+122*u,w,43*u,()=>this.startAuto(),true,false,true);
    this.button('HOW TO PLAY',x,y+177*u,w,37*u,()=>{this.menuPage='help';this.refresh();});
-   this.label('Sunday league football autobattler',x,y+235*u,w,28*u,13,C.cream);
+   this.label('11-a-side football autobattler',x,y+235*u,w,28*u,13,C.cream);
   }
  }
  tick(){if(!this.auto)return;const now=performance.now(),dt=Math.min(.25,Math.max(0,(now-this.auto.last)/1000));this.auto.last=now;this.advanceAuto(dt);}
@@ -175,6 +185,6 @@ export class Sunday{
  pointerMove(e){const d=this.drag;if(!d||d.id!==e.pointerId)return;const [x,y]=this.field.cssPxToLayer(e.clientX,e.clientY);if(Math.hypot(x-d.x,y-d.y)>5*this.u)d.moved=true;}
  pointerUp(e){const d=this.drag;this.drag=null;if(!d||d.id!==e.pointerId||d.moved)return;const [x,y]=this.field.cssPxToLayer(e.clientX,e.clientY),b=d.button;if(b.enabled&&x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h)b.action();}
  key(e){if(e.repeat)return;const k=e.key.toLowerCase(),s=this.auto;if(!s){if(k==='enter')this.startAuto();else if(k==='escape'){this.menuPage='main';this.refresh();}return;}
-  if(k==='escape')this.exitAuto();else if(k===' '&&s.phase==='match'){s.paused=!s.paused;this.refresh();}else if(['1','2','4'].includes(k)&&s.phase==='match'){s.speed=Number(k);this.refresh();}
+  if(k==='escape'&&s.phase!=='loading')this.exitAuto();else if(k===' '&&s.phase==='match'){s.paused=!s.paused;this.refresh();}else if(['1','2','4'].includes(k)&&s.phase==='match'){s.speed=Number(k);this.refresh();}
  }
 }
