@@ -6,10 +6,10 @@ async function run(seed,profile){
  for(let i=0;i<20000&&!m.finished;i++){m.step();assert.ok(Number.isFinite(m.ball.x)&&Number.isFinite(m.ball.z));}
  assert.ok(m.finished,'match must finish');
  const f=m.flow;
- return {seed,profile,score:m.score.join('-'),goals:f.goals,returns:f.returnPasses,shotZones:f.shotZones,shots:f.shots,passes:m.stats.reduce((n,t)=>n+t.completed,0),boards:f.boardBounces,live:f.playTicks/(f.playTicks+f.deadTicks),longestQuiet:f.longestQuiet,offside:f.phases.offside||0,deadSeconds:f.deadTicks*SOCCER_STEP};
+ return {seed,profile,score:m.score.join('-'),crowding:f.crowdedTicks/Math.max(1,f.shapeTicks),spread:f.spreadSum/Math.max(1,f.shapeTicks),controlled:f.ownedTicks/Math.max(1,f.playTicks),chains:f.threePassChains,goals:f.goals,returns:f.returnPasses,shotZones:f.shotZones,shots:f.shots,passes:m.stats.reduce((n,t)=>n+t.completed,0),boards:f.boardBounces,live:f.playTicks/(f.playTicks+f.deadTicks),longestQuiet:f.longestQuiet,offside:f.phases.offside||0,deadSeconds:f.deadTicks*SOCCER_STEP};
 }
 test('five-a-side match flow comparison across independent seeds',async()=>{
- let rows=[];for(const seed of [12345,728,9921,1467,2781,511])for(const profile of ['original','arcade','express'])rows.push(await run(seed,profile));
+ let rows=[];for(const seed of [12345,728,9921,1467,2781,511])for(const profile of ['original','arcade','express','shape'])rows.push(await run(seed,profile));
  console.log('MATCH_FLOW_COMPARISON '+JSON.stringify(rows));
  const tuned=rows.filter(r=>r.profile==='arcade'),base=rows.filter(r=>r.profile==='original');
  const sum=(rs,k)=>rs.reduce((n,r)=>n+r[k],0);
@@ -23,4 +23,9 @@ test('five-a-side match flow comparison across independent seeds',async()=>{
  assert.ok(sum(express,'goals')>sum(tuned,'goals'),'Express should score more goals across the same seeds');
  assert.ok(sum(express,'live')/express.length>.85,'Maintain continuous play');
  assert.ok(sum(express,'passes')>=sum(tuned,'passes'),'Maintain or improve combination play');
+ const shape=rows.filter(r=>r.profile==='shape');
+ assert.ok(sum(shape,'crowding')<sum(express,'crowding'),'Reduce four-player ball crowding');
+ assert.ok(sum(shape,'spread')>sum(express,'spread'),'Increase team spacing');
+ assert.ok(sum(shape,'passes')>=sum(express,'passes')*.75,'Preserve passing');
+ assert.ok(sum(shape,'controlled')>=sum(express,'controlled')*.9,'Preserve controlled possession');
 });
