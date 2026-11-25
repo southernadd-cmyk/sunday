@@ -1,4 +1,3 @@
-import {createSoccerMatch} from '../../construct/scripts/engine.js';
 import {SYSTEMS} from './five-tactics.js';
 import {readFileSync,writeFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
@@ -38,6 +37,7 @@ if(process.argv[2]==='aggregate'){
   }
  }
 }else{
+ const {createSoccerMatch}=await import('../../construct/scripts/engine.js');
  const seed=Number(process.argv[2]);assert.ok(seeds.includes(seed));
  const rows=[];
  for(const home of ids)for(const away of ids)for(const variant of ['legacy','compact']){
