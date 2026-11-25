@@ -117,33 +117,37 @@ export class Sunday{
  pitchRect(x,y,w,h,c){const q=this.layout.play,L=this.v.left,T=this.v.top;const x1=Math.max(q.x,x),y1=Math.max(q.y,y),x2=Math.min(q.x+q.w,x+w),y2=Math.min(q.y+q.h,y+h);if(x2>x1&&y2>y1)this.plans.fillRect(x1-L,y1-T,x2-L,y2-T,c);}
  pitchDisk(x,y,rx,ry,c){const steps=16;for(let i=0;i<steps;i++){const v=-1+2*(i+.5)/steps,k=Math.sqrt(Math.max(0,1-v*v));this.pitchRect(x-rx*k,y+ry*(v-1/steps),2*rx*k,2*ry/steps+.3*this.u,c);}}
  drawPitchEffects(){
-  this.plans.clearCanvas(C.clear);const m=this.auto?.match;if(!m)return;const scale=this.scale;
-  if(m.mutations.squeeze){
-   for(const side of [-1,1]){const a=this.point({x:side<0?-34:20.4,z:-47}),w=13.6*scale,h=94*scale;
-    this.pitchRect(a.x,a.y,w,h,[.23,.24,.18,1]);const x=side<0?a.x+w-2*this.u:a.x;
-    this.pitchRect(x,a.y,3*this.u,h,C.gold);
+  this.plans.clearCanvas(C.clear);const m=this.auto?.match;if(!m)return;const scale=this.scale,u=this.u;
+  for(const h of m.mutations.geometry){
+   const p=this.point(h),rx=h.radius*scale,ry=h.depthRadius*scale;
+   if(h.kind==='hole'){this.pitchDisk(p.x,p.y,rx*1.1,ry*1.1,[.28,.22,.13,1]);this.pitchDisk(p.x,p.y,rx,ry,[.025,.04,.035,1]);this.pitchDisk(p.x,p.y,rx*.65,ry*.62,[.005,.01,.01,1]);}
+   else if(h.kind==='bumper'){this.pitchDisk(p.x,p.y,rx,ry,[.69,.28,.13,1]);this.pitchDisk(p.x,p.y,rx*.75,ry*.75,C.gold);this.pitchDisk(p.x,p.y,rx*.40,ry*.40,C.red);}
+   else if(h.kind==='wall'){
+    this.pitchRect(p.x-rx,p.y-4*u,2*rx,8*u,[.24,.25,.22,1]);this.pitchRect(p.x-rx,p.y-5*u,2*rx,3*u,[.86,.86,.75,1]);
+    for(let j=-rx;j<rx;j+=12*u)this.pitchRect(p.x+j,p.y-4*u,2*u,7*u,[.48,.49,.44,1]);
+   }else if(h.kind==='snow'){
+    this.pitchDisk(p.x,p.y,rx,ry,[.72,.88,.92,.57]);this.pitchDisk(p.x,p.y,rx*.78,ry*.78,[.85,.94,.98,.44]);
+    for(let j=0;j<18;j++){const a=j*2.4,rr=.8*Math.sqrt(j/18);this.pitchRect(p.x+Math.cos(a)*rx*rr,p.y+Math.sin(a)*ry*rr,2*u,2*u,[1,1,1,.85]);}
+   }else if(h.kind==='hill'){
+    for(let i=0;i<5;i++){const k=1-i*.16;this.pitchDisk(p.x,p.y,rx*k,ry*k,[.27+i*.075,.43+i*.065,.15+i*.025,.86]);}
+   }else if(h.kind==='mud'){
+    this.pitchDisk(p.x,p.y,rx,ry,[.37,.24,.13,.8]);this.pitchDisk(p.x,p.y,rx*.75,ry*.7,[.47,.32,.17,.75]);
+    for(let j=0;j<12;j++){const a=j*2.4;this.pitchRect(p.x+Math.cos(a)*rx*.64,p.y+Math.sin(a)*ry*.6,3*u,2*u,[.24,.17,.10,.8]);}
+   }else if(h.kind==='wind'){
+    this.pitchDisk(p.x,p.y,rx,ry,[.42,.79,.78,.25]);const sign=m.half===2?1:-1;
+    for(let j=-2;j<=2;j++){const x=p.x+j*rx*.27,y=p.y;this.pitchRect(x-1*u,y-ry*.45,2*u,ry*.9,[.83,.97,.92,.6]);this.pitchRect(x-3*u,y+sign*ry*.45,6*u,2*u,[.83,.97,.92,.8]);}
+   }else if(h.kind==='lightning'){
+    this.pitchDisk(p.x,p.y,rx,ry,[.18,.23,.35,.4]);
+    for(let j=-1;j<=1;j++)this.pitchDisk(p.x+j*rx*.36,p.y-ry*.45,rx*.42,ry*.27,[.26,.30,.39,.95]);
+    if(h.flash){this.pitchRect(p.x-2*u,p.y-ry*.38,4*u,ry*.42,C.gold);this.pitchRect(p.x-7*u,p.y-3*u,9*u,3*u,C.gold);this.pitchRect(p.x-7*u,p.y,3*u,ry*.38,C.gold);}
    }
   }
-  for(const h of m.mutations.geometry){const p=this.point(h),rx=h.radius*scale,ry=h.depthRadius*scale;
-   if(h.kind==='hole'){this.pitchDisk(p.x,p.y,rx*1.1,ry*1.1,[.28,.22,.13,1]);this.pitchDisk(p.x,p.y,rx,ry,[.025,.04,.035,1]);this.pitchDisk(p.x,p.y,rx*.65,ry*.62,[.005,.01,.01,1]);}
-   else{this.pitchDisk(p.x,p.y,rx,ry,[.69,.28,.13,1]);this.pitchDisk(p.x,p.y,rx*.75,ry*.75,C.gold);this.pitchDisk(p.x,p.y,rx*.40,ry*.40,C.red);}
-  }
-  for(const a of this.visualActors||m.actors){if(!a.visible)continue;const p=this.point(a);if(a.turbo)this.pitchRect(p.x-4*this.u,p.y+1*this.u,8*this.u,2*this.u,C.gold);if(a.cannon)this.pitchRect(p.x-4*this.u,p.y+3*this.u,8*this.u,2*this.u,C.red);}
+  for(const a of this.visualActors||m.actors)if(a.visible&&a.stunned){const p=this.point(a);for(let j=-1;j<=1;j++)this.pitchRect(p.x+j*5*u,p.y-this.actors[a.id].height-3*u,2*u,2*u,C.gold);}
   if(this.auto.armed&&this.drag?.kind==='power'){
    const power=POWERS.find(p=>p.id===this.auto.armed),drop=this.dropTarget(power,this.drag.x,this.drag.y);
-   if(power.type==='player'){
-    for(const a of (this.visualActors||m.actors).filter(p=>p.side===0&&p.role!=='GK'&&p.visible)){
-     const p=this.point(a);if(p.y>this.layout.play.y&&p.y<this.layout.play.y+this.layout.play.h){
-      const chosen=drop?.value===a.id;
-      this.plans.outlineEllipse(p.x-this.v.left,p.y-this.v.top,Math.max(12*this.u,3*scale*(a.size||1)),Math.max(8*this.u,1.6*scale*(a.size||1)),chosen?power.color:[.76,.82,.63,.8],(chosen?3:1)*this.u,false);
-     }
-    }
-   }else if(drop&&power.id==='squeeze'){
-    for(const side of [-1,1]){const p=this.point({x:side*20.4,z:-47});this.pitchRect(p.x-1.5*this.u,p.y,3*this.u,94*scale,[.49,.77,.88,.75]);}
-   }else if(drop&&power.type==='pitch'){
-    const p=this.point(drop.value),radius=power.id==='sinkhole'?5.33:2.67;
-    this.plans.outlineEllipse(p.x-this.v.left,p.y-this.v.top,radius*scale*2,radius*scale*2,power.color,2*this.u,false);
-   }
+   if(drop){const p=this.point(drop.value),rx=power.radius*68/40.8*scale,ry=power.radius*94/63.6*scale;
+    if(power.id==='wall')this.pitchRect(p.x-rx,p.y-3*u,2*rx,6*u,[.86,.86,.75,.8]);
+    else this.plans.outlineEllipse(p.x-this.v.left,p.y-this.v.top,rx*2,ry*2,power.color,2*u,false);}
   }
  }
  label(text,x,y,width,height,size=14,color=C.cream,align='left'){
@@ -179,6 +183,25 @@ export class Sunday{
  tokenDisc(cx,cy,r,color){
   // Cut-corner arcade token, not a rectangular card or button.
   for(let i=0;i<12;i++){const v=-1+2*(i+.5)/12,k=Math.sqrt(Math.max(0,1-v*v));this.rect(cx-r*k,cy+r*(v-1/12),2*r*k,2*r/12+.2*this.u,color);}
+ }
+ draftUi(){
+  const s=this.auto,{left:L,top:T,width:W,height:H}=this.v,u=this.u;
+  this.rect(L,T,W,H,C.navy);
+  const scale=Math.min(1,H/(345*u)),d=u*scale,cols=W/u>=600?4:2,rows=8/cols;
+  const titleH=53*d,footerH=58*d,cellH=(H-titleH-footerH)/rows,cw=W/cols;
+  this.label('CHOOSE THREE',L,T+8*d,W,28*d,22*scale,C.gold,'center');
+  this.label('BUILD A WEATHER SYSTEM  /  '+s.selected.length+'/3',L,T+34*d,W,18*d,10*scale,C.cream,'center');
+  POWERS.forEach((p,i)=>{
+   const x=L+(i%cols)*cw,y=T+titleH+Math.floor(i/cols)*cellH,cx=x+cw/2,r=Math.max(8*d,Math.min(16*d,cellH*.17)),cy=y+r+3*d,chosen=s.selected.includes(p.id);
+   const linked=s.selected.some(id=>ENVIRONMENT_GRAPH.some(e=>(e.a===id&&e.b===p.id||e.b===id&&e.a===p.id)&&e.kind!=='counter'));
+   if(chosen)this.rect(x+2*d,y+2*d,cw-4*d,cellH-4*d,[.19,.25,.18,1]);
+   this.tokenDisc(cx,cy,r,chosen?C.gold:linked?p.color:C.line);this.tokenDisc(cx,cy,r-2*d,C.navy);this.icon(p,cx-r*.6,cy-r*.6,r*1.2);
+   this.label(p.name+(chosen?' +':''),x,y+2*r+6*d,cw,16*d,12*scale,p.color,'center');
+   this.label(p.detail,x+4*d,y+2*r+22*d,cw-8*d,Math.max(1,cellH-2*r-24*d),Math.min(10,cw/u/19)*scale,C.cream,'center');
+   this.tokens.push({id:p.id,x,y,w:cw,h:cellH,enabled:true});
+  });
+  const edges=ENVIRONMENT_GRAPH.filter(e=>s.selected.includes(e.a)&&s.selected.includes(e.b));
+  this.label(edges.length?edges.map(e=>e.detail).join(' / '):'Tap any three tokens. Related powers glow.',L+5*d,T+H-footerH+4*d,W-10*d,footerH-8*d,11*scale,C.gold,'center');
  }
  matchUi(){
   const s=this.auto,m=s.match,{left:L,top:T,right:R,bottom:B,width:W}=this.v,u=this.u,l=this.layout,q=l.play;
