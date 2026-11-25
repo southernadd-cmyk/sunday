@@ -1,7 +1,7 @@
 // SUNDAY adapter for Soccer-JS, pinned upstream revision in engine-evaluation.yml.
 // This file is copied to the upstream checkout and bundled as a browser ESM.
 // No upstream rendering, audio, network fetches, or DOM controls are needed.
-import {systemAssignment,resolveSystem,systemCanPress,freeKickLayout,planDirectFreeKick} from './five-tactics.js';
+import {systemAssignment,resolveSystem,systemCanPress,freeKickLayout,planDirectFreeKick,adaptiveTactic,ADAPTIVE_REVIEW_SECONDS} from './five-tactics.js';
 import {possessionIntent,possessionAction} from './possession-intent.js';
 const {Simulator,MatchStates}=require('./kernel/providers/simulator/simulator.js');
 const {Settings}=require('./kernel/settings.js');
@@ -61,7 +61,7 @@ const FIVE_PROFILE={FORMATION_HOLD:.43,ATTACK_SUPPORT_INTENSITY:.84,ATTACK_SUPPO
 export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,format=11,profile='express',systems=['diamond','diamond'],options={}){
  // Soccer-JS uses shared Settings; this proof runs one active match at a time.
  if(!Array.isArray(systems)||systems.length!==2)throw Error('Select one tactical system per team');
- const systemIds=systems.slice();const teamSystems=systemIds.map(resolveSystem);
+ const systemIds=systems.slice(),startingSystems=systems.slice();const teamSystems=systemIds.map(resolveSystem);
  const baseHome=teamSettings(traits),away=teamSettings([['shield'],['hunt','touch'],['overlap','rifle']][Math.min(2,Math.max(0,opponent))]);
  const intent=format===5&&profile==='intent',zones=format===5&&(profile==='zones'||intent),attack=format===5&&(profile==='attack'||zones),shape=format===5&&(profile==='shape'||attack),express=format===5&&(profile==='express'||shape),arcade=format===5&&profile!=='original';
  if(arcade)for(const team of [baseHome,away])for(const [k,v] of Object.entries(FIVE_PROFILE)){if(typeof upstreamDefaults[k]!=='number')throw Error('Missing five-a-side setting '+k);team[k]=v;}
@@ -87,8 +87,8 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
  let directFlight=null,layoff=null,wallContact=false;
  let frames=0,lastState='',lastScore=[0,0],pending=null,chain=0,chainSide=-1,lastLaunch=null;
  const originals=new Map();
- const flow={freeKicks:{awarded:0,planned:0,eligible:0,probed:0,driven:0,curled:0,dipped:0,layoffs:0,layoffShots:0,returnAttempts:0,returnCompleted:0,returnShots:0,combinationGoals:0,shotGoals:0,shotSaves:0,shotWallBlocks:0,shotDeflections:0,shotMisses:0,shotUnresolved:0,shots:0,passes:0,releasedShots:0,releasedPasses:0,completedPasses:0,interceptedPasses:0,indirect:0,wallPlayers:0,clearanceViolations:0,byTeam:[0,0]},intentDecisions:0,intentCounts:{},intentActions:{},teamAssignments:[{},{}],teamIntentActions:[{},{}],assignmentTicks:0,assignmentCounts:{},kickoffTicks:0,kickoffCrowdedTicks:0,finalThirdEntries:0,createdShots:0,crowdedTicks:0,shapeTicks:0,spreadSum:0,ownedTicks:0,threePassChains:0,returnPasses:0,shotZones:[0,0,0],playTicks:0,deadTicks:0,boardBounces:0,turnovers:0,shots:0,goals:0,longestQuiet:0,quiet:0,phases:{}};
- const state={flow,systems:systemIds,profile:intent?'intent':zones?'zones':attack?'attack':shape?'shape':express?'express':arcade?'arcade':'original',duration,time:0,matchSeconds:0,half:1,finished:false,phase:'kickoff',actors:[],ball:{x:0,z:0,y:0},score:[0,0],stats,events,step,upstream:'soccer-js',stepSeconds:SOCCER_STEP,chips:[],charge:0,chipRevision:0,grantChip,useChip,canUseChip,chipStats:{shotsPowered:0,combos:0,used:0,reloads:0},playerAttributes:()=>sim.players.map(p=>({team:p.team,role:p.role,...p.stats,currentStamina:p.currentStamina}))};
+ const flow={tacticalReviews:0,tacticalChanges:[],freeKicks:{awarded:0,planned:0,eligible:0,probed:0,driven:0,curled:0,dipped:0,layoffs:0,layoffShots:0,returnAttempts:0,returnCompleted:0,returnShots:0,combinationGoals:0,shotGoals:0,shotSaves:0,shotWallBlocks:0,shotDeflections:0,shotMisses:0,shotUnresolved:0,shots:0,passes:0,releasedShots:0,releasedPasses:0,completedPasses:0,interceptedPasses:0,indirect:0,wallPlayers:0,clearanceViolations:0,byTeam:[0,0]},intentDecisions:0,intentCounts:{},intentActions:{},teamAssignments:[{},{}],teamIntentActions:[{},{}],assignmentTicks:0,assignmentCounts:{},kickoffTicks:0,kickoffCrowdedTicks:0,finalThirdEntries:0,createdShots:0,crowdedTicks:0,shapeTicks:0,spreadSum:0,ownedTicks:0,threePassChains:0,returnPasses:0,shotZones:[0,0,0],playTicks:0,deadTicks:0,boardBounces:0,turnovers:0,shots:0,goals:0,longestQuiet:0,quiet:0,phases:{}};
+ const state={flow,systems:systemIds,startingSystems,adaptiveOpponent:intent&&options.adaptiveOpponent===true,profile:intent?'intent':zones?'zones':attack?'attack':shape?'shape':express?'express':arcade?'arcade':'original',duration,time:0,matchSeconds:0,half:1,finished:false,phase:'kickoff',actors:[],ball:{x:0,z:0,y:0},score:[0,0],stats,events,step,upstream:'soccer-js',stepSeconds:SOCCER_STEP,chips:[],charge:0,chipRevision:0,grantChip,useChip,canUseChip,chipStats:{shotsPowered:0,combos:0,used:0,reloads:0},playerAttributes:()=>sim.players.map(p=>({team:p.team,role:p.role,...p.stats,currentStamina:p.currentStamina}))};
  // Contextual decision hook: the upstream Dribble state still owns timing,
  // movement, kick windup, and the actual pass/shot state transitions.
  if(intent){
@@ -372,6 +372,41 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   onBlock(info){if(info?.team==='A'||info?.team==='B')stats[side(info.team)].blocks++;event('SHOT BLOCKED',info?.team,'save');}
  };
  function point(p){return {x:(p.y/field.height-.5)*68,z:(.5-p.x/field.width)*94};}
+ // Match-clock review windows, not real-world time. Reviews occur in open
+ // play only; starting selection remains untouched when adaptation is off.
+ let reviewAt=ADAPTIVE_REVIEW_SECONDS,lastTacticChange=-Infinity;
+ let windowStart={shots:[0,0],passes:[0,0],interceptions:0,control:[0,0],wide:0,entries:0};
+ let observed={control:[0,0],wide:0,entries:0,inThird:false};
+ function reviewOpponent(){
+  if(!state.adaptiveOpponent||sim.matchState!=='play'||sim.setPieceType)return;
+  const ball=sim.ball,owner=ball.owner;
+  if(owner){
+   const i=side(owner.team);observed.control[i]+=SOCCER_STEP;
+   if(i===0){
+    if(Math.abs(ball.y-field.centerY)>field.height*.26)observed.wide+=SOCCER_STEP;
+    const depth=sim.isSecondHalf()?1-ball.x/field.width:ball.x/field.width;
+    if(depth>.67&&!observed.inThird)observed.entries++;
+    observed.inThird=depth>.67;
+   }else observed.inThird=false;
+  }
+  if(sim.matchTimer<reviewAt)return;
+  const second=sim.matchTimer;
+  reviewAt=(Math.floor(second/ADAPTIVE_REVIEW_SECONDS)+1)*ADAPTIVE_REVIEW_SECONDS;
+  const control=observed.control.map((v,i)=>v-windowStart.control[i]),total=control[0]+control[1];
+  const players=sim.players.filter(p=>p.team==='B'&&p.role!=='GK'&&!p.isSentOff);
+  const stamina=players.reduce((n,p)=>n+p.currentStamina,0)/Math.max(1,players.length);
+  const window={controlSeconds:total,possessionShare:total?control[1]/total:.5,shots:stats[1].shots-windowStart.shots[1],opponentShots:stats[0].shots-windowStart.shots[0],opponentEntries:observed.entries-windowStart.entries,opponentWideShare:control[0]?(observed.wide-windowStart.wide)/control[0]:0,interceptions:stats[1].interceptions-windowStart.interceptions,opponentPasses:stats[0].passes-windowStart.passes[0]};
+  windowStart={shots:stats.map(t=>t.shots),passes:stats.map(t=>t.passes),interceptions:stats[1].interceptions,control:observed.control.slice(),wide:observed.wide,entries:observed.entries};
+  flow.tacticalReviews++;
+  const decision=adaptiveTactic({current:systemIds[1],base:startingSystems[1],second,goalDifference:sim.scoreB-sim.scoreA,stamina,window,lastChange:lastTacticChange});
+  if(decision.system!==systemIds[1]){
+   const change={second,from:systemIds[1],to:decision.system,reason:decision.reason,score:[sim.scoreA,sim.scoreB],stamina,window};
+   systemIds[1]=decision.system;teamSystems[1]=resolveSystem(decision.system);lastTacticChange=second;
+   flow.tacticalChanges.push(change);state.lastTacticalChange=change;
+   sim.sundayResetIntent?.();
+   event('OPP: '+decision.reason,'B','match');
+  }
+ }
  function snapshot(){
   state.actors=sim.players.map((p,i)=>({id:i,...point(p),team:p.role==='GK'?2:side(p.team),side:side(p.team),role:p.role,assignment:zones?p.sundayAssignment||null:null,visible:!p.isSentOff,sliding:!!p.isSliding,frame:Math.floor(frames/3)%2}));
   state.ball={...point(sim.ball),y:Math.max(0,sim.ball.z||0)+.4};
@@ -425,6 +460,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   if(before&&after&&before.team!==after.team){flow.turnovers++;lastCompleted=null;chain=0;chainSide=-1;}if(after?.team==='B')breakCombo();
   if(after){stats[side(after.team)].possession+=SOCCER_STEP;if(beforeShot&&after.role==='GK'&&after!==before){stats[side(after.team)].saves++;if(after.team==='A')gainCharge();event('KEEPER SAVES',after.team,'save');}}
   if(state.score[0]!==lastScore[0]||state.score[1]!==lastScore[1]){flow.goals++;lastCompleted=null;lastThirdSide=null;const team=state.score[0]>lastScore[0]?'A':'B';event('GOAL! '+state.score.join('–'),team,'goal');lastScore=[...state.score];chain=0;chainSide=-1;breakCombo();}
+  reviewOpponent();
   const phase=sim.matchState;
   if(intent&&phase!=='play')sim.sundayResetIntent();
   if(phase!==lastState){if(phase==='freekick'){flow.freeKicks.awarded++;if(sim.setPieceIndirect)flow.freeKicks.indirect++;flow.freeKicks.byTeam[side(sim.setPieceKickingTeam)]++;}if(['corner','goalkick','throwin','freekick','offside','penalty','halftime','fulltime','kickoff'].includes(phase)){event(phase.toUpperCase(),sim.setPieceKickingTeam,'match');pending=null;lastLaunch=null;chain=0;chainSide=-1;breakCombo();}lastState=phase;}
