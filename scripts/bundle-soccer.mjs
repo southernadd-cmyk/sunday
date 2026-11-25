@@ -20,6 +20,11 @@ for(const file of ['kernel/providers/simulator/simulator.js','kernel/core/entiti
  if(!original.includes('formation.length !== 11'))throw new Error('Upstream formation guard changed: '+file);
  writeFileSync(resolve(upstream,file),original.replace('formation.length !== 11','(formation.length !== 11 && formation.length !== 5)')+'\n');
 }
+// Five-a-side has no offside. Preserve the upstream eleven-a-side claim logic.
+const playerPath='kernel/core/entities/player.js';
+const playerOriginal=git('show','HEAD:'+playerPath);
+if(!playerOriginal.includes('if (ball.offsideReceiver) {'))throw Error('Upstream offside claim changed');
+writeFileSync(resolve(upstream,playerPath),playerOriginal.replace('if (ball.offsideReceiver) {','if (!Settings.SUNDAY_NO_OFFSIDE && ball.offsideReceiver) {')+'\n');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
 const license=readFileSync(resolve(upstream,'LICENSE'),'utf8');
