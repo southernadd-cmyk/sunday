@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,existsSync} from 'node:fs';
 import {Sunday} from '../construct/scripts/controller.js';
-import {clone,distance} from '../src/engine.js';
+
 const json=p=>JSON.parse(readFileSync(new URL('../construct/'+p,import.meta.url)));
 
 // A narrow contract double for documented Construct APIs. This verifies the
@@ -33,9 +33,6 @@ function click(g,text){
  const [clientX,clientY]=g.field.layerToCssPx(b.x+b.w/2,b.y+b.h/2),event={pointerId:1,button:0,clientX,clientY};
  g.pointerDown(event);g.pointerUp(event);
 }
-function tapPlayer(g,id){const p=g.point(g.run.state.actors[id]);const [clientX,clientY]=g.field.layerToCssPx(p.x,p.y),e={pointerId:1,button:0,clientX,clientY};g.pointerDown(e);g.pointerUp(e);}
-function finish(g){assert.ok(g.anim);g.anim.elapsed=g.anim.duration;g.tick();assert.equal(g.busy,false);}
-
 test('native Construct package references existing types, scripts, layouts and original frames',()=>{
  const project=json('project.c3proj'),layout=json('layouts/Saltmere.json'),uids=new Set(),sids=new Set();
  assert.equal(project.runtime,'c3');assert.equal(layout.layers.length,2);
@@ -53,154 +50,24 @@ test('native Construct package references existing types, scripts, layouts and o
  for(const name of ['main.js','controller.js','engine.js'])assert.equal(readFileSync(new URL('../construct/scripts/'+name,import.meta.url),'utf8'),readFileSync(new URL('../public/construct/scripts/project/'+name,import.meta.url),'utf8'));
  assert.match(readFileSync(new URL('../public/construct/index.html',import.meta.url),'utf8'),/Scirra Construct/);
 });
-test('pass transfers control, and a non-striker can plan a run',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');click(g,'PASS');tapPlayer(g,1);
- assert.equal(g.order.kind,'pass');assert.equal(g.preview.type,'move');click(g,'PLAY 2s');finish(g);
- assert.equal(g.run.state.ballOwner,1);assert.equal(g.selected,1);
- g.key({key:'w'});assert.equal(g.order.actor,1);assert.equal(g.preview.order.actor,1);
-});
-test('off-ball plans survive selection and play simultaneously',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');
- tapPlayer(g,4);const before=clone(g.run.state);g.key({key:'w'});tapPlayer(g,0);
- assert.ok(g.support[4]?.length);g.key({key:'a'});assert.equal(g.order.actor,0);
- assert.ok(g.preview.valid);g.play();finish(g);
- assert.ok(distance(g.run.state.actors[4],before.actors[4])>0);
- assert.ok(distance(g.run.state.actors[0],before.actors[0])>0);
- g.key({key:'r'});assert.deepEqual(g.run.state,before);
-});
-test('one-two has an immediately playable suggested run and rewind restores possession and resources',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');g.key({key:'o'});tapPlayer(g,1);
- assert.equal(g.order.kind,'one-two');assert.ok(g.order.path.length);assert.equal(g.preview.type,'move');
- const before=clone(g.run.state);click(g,'PLAY 2s');finish(g);assert.equal(g.run.state.passes,0);g.key({key:'r'});
- assert.deepEqual(g.run.state,before);assert.equal(g.run.rewinds,0);
-});
-test('native hit regions and pooled labels stay finite in a portrait viewport with a shifted origin',()=>{
- const r=runtime({width:960,height:2000,left:130,top:-600,cssScale:.375}),g=new Sunday(r);click(g,'NEW CAREER');
- const range=clone(g.run.state);click(g,'PASS');tapPlayer(g,1);assert.equal(g.order.kind,'pass');
- assert.deepEqual(g.run.state,range);assert.equal(g.narrow,true);
- for(const b of g.buttons){assert.ok([b.x,b.y,b.w,b.h].every(Number.isFinite));assert.ok(b.x>=r.viewport.left&&b.x+b.w<=r.viewport.right+.001);}
- const fill=r.draws.find(d=>d.kind==='fill'&&Math.abs(d.args[0]-12*g.u)<1e-8&&Math.abs(d.args[1]-12*g.u)<1e-8);assert.ok(fill,'Match HUD respects the shifted viewport');assert.ok(Math.abs(fill.args[0]-12*g.u)<1e-8);assert.ok(Math.abs(fill.args[1]-12*g.u)<1e-8);
- const created=g.labels.length;g.refresh();g.refresh();assert.equal(g.labels.length,created);
-});
-test('native pointer input plots a route and playback reaches the same ghost endpoint',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');const player=g.run.state.actors[0],target={x:player.x-5,z:player.z-8},p=g.point(target);
- const [clientX,clientY]=g.field.layerToCssPx(p.x,p.y),e={pointerId:1,button:0,clientX,clientY};g.pointerDown(e);g.pointerUp(e);
- assert.equal(g.order.kind,'run');const end={...g.preview.end};assert.equal(g.preview.type,'move');g.play();finish(g);assert.ok(distance(g.run.state.actors[0],end)<1e-8);
-});
-test('a learned dink is available on touch controls and cannot leak into a fresh run',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');g.run.buffs.chip=1;g.refresh();click(g,'SHOOT');click(g,'DINK');assert.equal(g.chip,true);
- g.newRun();assert.equal(g.run.buffs.chip,0);assert.equal(g.chip,false);assert.ok(!g.buttons.some(b=>b.label.text==='DINK ON'));
-});
 
-test('any outfielder can shoot, pass back to the striker, and receive a one-two',()=>{
- const g=new Sunday(runtime());const r=g.run;r.state.ballOwner=1;r.state.actors[1].x=0;r.state.actors[1].z=-32;r.state.actors[0].x=-10;r.state.actors[0].z=-15;r.state.ball={x:.5,z:-33,y:.6};r.intents=r.makeIntents();
- assert.ok(r.preview({kind:'shot',actor:1,target:{x:5}}).valid);
- assert.ok(r.preview({kind:'pass',actor:1,ally:0,path:[]}).valid);
- assert.ok(r.suggestOneTwo(0,{actor:1}));
- assert.equal(r.preview({kind:'shot',actor:0,target:{x:5}}).valid,false);
-});
-
-test('desktop camera rotates the pitch and maps input consistently',()=>{
- const g=new Sunday(runtime());assert.equal(g.landscape,true);assert.equal(g.pitch.angle,Math.PI/2);
- for(const p of [{x:-34,z:-47},{x:34,z:47},{x:12,z:5}]){
-  const q=g.point(p),a=g.ground(q.x,q.y);assert.ok(distance(a,p)<1e-8);
- }
- assert.ok(g.point({x:0,z:-47}).x>g.point({x:0,z:47}).x);
- click(g,'NEW CAREER');g.key({key:'arrowright'});assert.ok(g.order.path[0].z<g.run.state.actors[0].z);
-});
-
-test('defence controls, preview and playback use the same possession rules',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');g.run.kickoff(false);g.selected=g.run.selection();g.updateActors();g.refresh();
- assert.ok(g.run.defending);assert.ok(g.run.threat);click(g,'PRESS');assert.ok(g.preview.valid);
- const p=g.preview,clock=g.run.state.beats;g.play();finish(g);
- assert.equal(g.run.state.beats,clock-1);assert.equal(g.run.lastResult.type,p.type);
- assert.equal(g.run.lives,3);
- g.key({key:'r'});assert.ok(g.run.defending);assert.equal(g.run.state.beats,clock);
- click(g,'HOLD');assert.ok(g.preview.valid);
-});
-test('goalkeeper is selectable and can distribute possession',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');g.run.state.ballOwner=15;g.run.state.ball={x:.5,z:44,y:.6};g.run.intents=g.run.makeIntents();g.selected=0;g.refresh();
- g.select(15);assert.equal(g.selected,15);g.pass(6);assert.ok(g.preview.valid);assert.equal(g.order.actor,15);
-});
-
-test('timed reception buttons retain the runner path and alter delivery',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');
- for(const i of [7,8,9,10,11,12,13,14])Object.assign(g.run.state.actors[i],{x:32,z:-42});
- Object.assign(g.run.state.actors[0],{x:0,z:0});Object.assign(g.run.state.actors[1],{x:8,z:0});g.run.state.ball={x:.5,z:-1,y:.6};g.run.intents=g.run.makeIntents();g.updateActors();g.refresh();
- tapPlayer(g,1);g.planPath([{x:8,z:-11}]);tapPlayer(g,0);click(g,'PASS');tapPlayer(g,1);
- assert.ok(g.support[1]?.length);click(g,'0.5s');assert.ok(g.preview.valid);const early=g.preview.delivery.target.z;
- click(g,'1.5s');assert.ok(g.preview.valid);assert.ok(g.preview.delivery.target.z<early);click(g,'PLAY 2s');finish(g);assert.equal(g.selected,1);
-});
-test('challenge controls arm a tackle and allow its timing to be adjusted',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');g.run.kickoff(false);g.selected=4;g.updateActors();g.refresh();
- click(g,'STAND');assert.equal(g.order.kind,'tackle');assert.equal(g.order.tackle,'stand');click(g,'0.5s');assert.equal(g.order.tackleAt,.5);
- click(g,'SLIDE');assert.equal(g.order.tackle,'slide');click(g,'2.0s');assert.equal(g.order.tackleAt,2);assert.ok(g.preview.valid);
-});
-
-test('tutorial is playable from start to finish and does not alter the saved cup',()=>{
- const g=new Sunday(runtime()),cup=g.run,original=clone(cup.state),profile=clone(g.profile);
- click(g,'TUTORIALS');click(g,'FULL TUTORIAL');assert.equal(g.practice.index,0);
- g.planPath([{x:0,z:-6}]);click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
- click(g,'NEXT DRILL');assert.equal(g.practice.index,1);
- tapPlayer(g,1);g.planPath([{x:8,z:-11}]);tapPlayer(g,0);click(g,'PASS');tapPlayer(g,1);click(g,'1.5s');click(g,'PLAY 2s');finish(g);
- assert.equal(g.practice.outcome.passed,true);click(g,'NEXT DRILL');
- click(g,'SHOOT');g.aim(5.8);click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
- click(g,'NEXT DRILL');click(g,'STAND');assert.equal(g.preview.tackleOutcome,'won');assert.ok(g.preview.challenge.distance<=g.preview.challenge.reach);
- click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
- click(g,'NEXT DRILL');click(g,'SLIDE');assert.equal(g.preview.tackleOutcome,'won');click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
- click(g,'BACK TO TUTORIALS');assert.equal(g.practice,null);assert.equal(g.menuPage,'tutorials');assert.equal(g.run,cup);assert.deepEqual(cup.state,original);assert.deepEqual(g.profile,profile);
-});
-test('a failed drill can be retried with exactly the same scenario',()=>{
- const g=new Sunday(runtime());click(g,'TUTORIALS');click(g,'4. STANDING TACKLE');const start=clone(g.run.state);
- g.planPath([{x:25,z:17}]);click(g,'STAND');assert.equal(g.preview.tackleOutcome,'miss');
- click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,false);click(g,'RETRY DRILL');assert.deepEqual(g.run.state,start);
- click(g,'STAND');assert.equal(g.preview.tackleOutcome,'won');
-});
-test('tutorial can be reopened from help and works on portrait input',()=>{
- const g=new Sunday(runtime({width:960,height:2000,cssScale:.375}));click(g,'NEW CAREER');click(g,'?');click(g,'PLAY TUTORIAL');
- assert.equal(g.practice.index,0);assert.ok(!g.landscape);click(g,'EXIT');assert.equal(g.practice,null);
-});
-
-test('main menu isolates new careers, tutorial selection and resume',()=>{
- const g=new Sunday(runtime());assert.ok(g.intro);assert.ok(g.buttons.some(b=>b.label.text==='NEW CAREER'));assert.ok(!g.buttons.some(b=>b.label.text==='PLAY 2s'));
- click(g,'TUTORIALS');click(g,'3. SHOOTING');assert.equal(g.practice.index,2);assert.equal(g.practiceSingle,true);
- click(g,'SHOOT');g.aim(5.8);click(g,'PLAY 2s');finish(g);click(g,'BACK TO TUTORIALS');assert.ok(g.intro);
- click(g,'BACK TO MAIN MENU');click(g,'NEW CAREER');assert.equal(g.intro,false);const cup=g.run;
- g.planPath([{x:-12,z:-6}]);const plan=clone(g.order);click(g,'MENU');click(g,'NEW CAREER');assert.equal(g.menuPage,'confirm');click(g,'CANCEL');click(g,'RESUME CAREER');assert.equal(g.run,cup);assert.deepEqual(g.order,plan);
- click(g,'MENU');click(g,'NEW CAREER');click(g,'START NEW CAREER');assert.notEqual(g.run,cup);
-});
-test('title and tutorial menus fit a narrow viewport',()=>{
- const g=new Sunday(runtime({width:960,height:2000,left:130,top:-600,cssScale:.375}));click(g,'TUTORIALS');
- for(const b of g.buttons)assert.ok(b.x>=g.v.left&&b.x+b.w<=g.v.right&&b.y>=g.v.top&&b.y+b.h<=g.v.bottom);
- g.key({key:'5'});assert.equal(g.practice.index,4);click(g,'EXIT');assert.equal(g.menuPage,'tutorials');assert.equal(g.intro,true);
-});
-
-function tapGoal(g,x){
- const q=g.point({x,z:-47}),[clientX,clientY]=g.field.layerToCssPx(q.x,q.y),ev={pointerId:1,button:0,clientX,clientY};
- g.pointerDown(ev);g.pointerUp(ev);
-}
-test('shot targeting is a continuous goal-mouth choice, not high versus low, in both orientations',()=>{
- for(const opts of [{},{width:960,height:2000,cssScale:.375}]){
-  const g=new Sunday(runtime(opts));click(g,'NEW CAREER');g.run.state.actors[0].x=4;g.run.state.actors[0].z=-36;g.run.state.ball={x:4.5,z:-37,y:.6};g.run.intents=g.run.makeIntents();g.updateActors();g.refresh();
-  click(g,'SHOOT');assert.ok(g.buttons.some(b=>b.label.text==='NEAR'));assert.ok(!g.buttons.some(b=>['HIGH','LOW','LEFT','RIGHT'].includes(b.label.text)));
-  tapGoal(g,-2.7);assert.equal(g.order.kind,'shot');assert.ok(Math.abs(g.order.target.x+2.7)<1e-8);assert.equal(g.preview.valid,true);
-  tapGoal(g,1.25);assert.ok(Math.abs(g.order.target.x-1.25)<1e-8);
-  click(g,'NEAR');assert.equal(g.order.target.x,5.8);click(g,'FAR');assert.equal(g.order.target.x,-5.8);click(g,'CENTRE');assert.equal(g.order.target.x,0);
-  g.run.state.actors[0].x=-4;g.refresh();click(g,'NEAR');assert.equal(g.order.target.x,-5.8);
- }
-});
-test('shooting mode ignores grass taps and keeps an impossible shot visibly invalid',()=>{
- const g=new Sunday(runtime());click(g,'NEW CAREER');click(g,'SHOOT');
- const p=g.point({x:0,z:0}),[clientX,clientY]=g.field.layerToCssPx(p.x,p.y),ev={pointerId:1,button:0,clientX,clientY};g.pointerDown(ev);g.pointerUp(ev);
- assert.equal(g.targetMode,'shot');assert.equal(g.order,null);
- tapGoal(g,0);assert.equal(g.order.kind,'shot');assert.equal(g.preview.valid,false);assert.ok(!g.buttons.find(b=>b.label.text==='PLAY 2s').enabled);
-});
-
-test('autoplay lab is separate from tactical career, drafts and plays a real match',()=>{
- const g=new Sunday(runtime()),cup=g.run,original=clone(cup.state);click(g,'AUTOPLAY LAB');assert.equal(g.auto.phase,'draft');
- const id=g.auto.offers[0];g.autoChoose(id);assert.deepEqual(g.auto.traits,[id]);assert.equal(g.auto.phase,'match');assert.equal(g.planning(),false);
+test('title opens only the autoplay career, with no legacy movement controls',()=>{
+ const g=new Sunday(runtime());assert.deepEqual(g.buttons.map(b=>b.label.text),['NEW CAREER','HOW TO PLAY']);
+ click(g,'HOW TO PLAY');click(g,'BACK');click(g,'NEW CAREER');assert.equal(g.auto.phase,'draft');
+ const id=g.auto.offers[0];g.autoChoose(id);assert.deepEqual(g.auto.traits,[id]);assert.equal(g.auto.phase,'match');
+ assert.ok(!g.buttons.some(b=>/PLAY 2s|SPRINT|TACKLE|SHOOT/.test(b.label.text)));
+ const point=g.point({x:0,z:0}),[clientX,clientY]=g.field.layerToCssPx(point.x,point.y),ev={pointerId:1,button:0,clientX,clientY};
+ g.pointerDown(ev);g.pointerUp(ev);assert.equal(g.drag,null);
  click(g,'PAUSE');const time=g.auto.match.time;g.advanceAuto(2);assert.equal(g.auto.match.time,time);click(g,'PLAY');click(g,'4×');
  for(let i=0;i<25&&g.auto.phase==='match';i++)g.advanceAuto(1);
  assert.equal(g.auto.phase,'result');assert.equal(g.auto.results.length,1);click(g,'DRAFT NEXT BEHAVIOUR');assert.equal(g.auto.phase,'draft');assert.ok(!g.auto.offers.includes(id));
- click(g,'BACK TO MENU');assert.equal(g.auto,null);assert.equal(g.run,cup);assert.deepEqual(g.run.state,original);
+ click(g,'BACK TO MENU');assert.equal(g.auto,null);
+});
+test('native autoplay controls remain in view on portrait and desktop',()=>{
+ for(const opts of [{},{width:960,height:2000,left:130,top:-600,cssScale:.375}]){
+  const g=new Sunday(runtime(opts));click(g,'NEW CAREER');g.autoChoose(g.auto.offers[0]);
+  for(const b of g.buttons)assert.ok(b.x>=g.v.left&&b.x+b.w<=g.v.right&&b.y>=g.v.top&&b.y+b.h<=g.v.bottom);
+  assert.ok(g.actors.slice(0,16).every(a=>Number.isFinite(a.x)&&Number.isFinite(a.y)&&a.isVisible));
+  assert.ok(!g.ring.isVisible);
+ }
 });
