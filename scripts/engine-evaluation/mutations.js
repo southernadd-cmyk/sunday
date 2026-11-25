@@ -85,3 +85,128 @@ export function createMutations({sim,field,dt,event,resetPlayer}){
  function snapshot(project){return {canActivate:canActivate(),active:[...active.values()].map(e=>({id:e.id,player:e.player?sim.players.indexOf(e.player):null,seconds:Math.max(0,(e.until-tick)*dt)})),used:[...used],geometry:geometry().map(h=>({...project(h),radius:h.r/field.height*68,depthRadius:h.r/field.width*94,kind:h.kind})),squeeze:active.has('squeeze'),ballHidden:!!drop,fallen:[...fallen.keys()].map(p=>sim.players.indexOf(p)),metrics:{...metrics}};}
  return {activate,before,after,snapshot,metrics,limits,active,fallen,used,recoverAll(){for(const [p,f] of fallen)recover(p,f);},shot(p){if(p?.sundayMutationShot>1)metrics.cannonShots++;}};
 }
+
+// Environmental sandbox: one placement per equipped effect, reusable after its
+// duration plus a recovery window. Legacy mutations remain only for lab tests.
+export const ENVIRONMENT=Object.freeze({
+ lightning:{name:'STORM',detail:'Cloud strikes blue outfield players; briefly stuns them.',radius:5,duration:7,cooldown:5,color:[.98,.80,.30,1],art:['011110','111111','011100','001100','011000','010000']},
+ snow:{name:'SNOW',detail:'Ice preserves momentum; both teams overshoot turns.',radius:7,duration:10,cooldown:4,color:[.78,.91,1,1],art:['101101','011110','111111','111111','011110','101101']},
+ sinkhole:{name:'HOLE',detail:'Swallows low balls and outfield players.',radius:3.2,duration:10,cooldown:5,color:[.65,.50,.30,1],art:['011110','100001','101101','101101','100001','011110']},
+ hill:{name:'HILL',detail:'Slope rolls the loose ball downhill and slows uphill runs.',radius:6,duration:10,cooldown:4,color:[.67,.83,.39,1],art:['000100','001110','011110','011111','111111','111111']},
+ wall:{name:'WALL',detail:'Solid cross-pitch barrier redirects runs and low balls.',radius:5,duration:8,cooldown:5,color:[.78,.78,.71,1],art:['111111','100101','111111','101001','111111','100101']},
+ wind:{name:'WIND',detail:'Gust pushes loose balls toward your attacking end.',radius:7,duration:8,cooldown:4,color:[.56,.87,.83,1],art:['111100','000110','111111','000011','111110','000000']},
+ mud:{name:'MUD',detail:'Sticky ground slows both teams and stops loose balls.',radius:6,duration:10,cooldown:4,color:[.73,.48,.31,1],art:['011100','111110','110111','011111','111110','001100']},
+ pinball:{name:'BUMPER',detail:'Two solid posts rebound low balls and obstruct runs.',radius:4,duration:10,cooldown:4,color:[.96,.54,.64,1],art:['011000','111100','011000','000110','001111','000110']}
+});
+export const ENVIRONMENT_GRAPH=Object.freeze([
+ {a:'lightning',b:'snow',kind:'amplify',detail:'Frozen ground extends strike radius.'},
+ {a:'lightning',b:'mud',kind:'amplify',detail:'Stunned opponents stay down longer in mud.'},
+ {a:'lightning',b:'wall',kind:'setup',detail:'Stop runners in a blocked channel.'},
+ {a:'lightning',b:'sinkhole',kind:'setup',detail:'Leave a loose ball beside the hole.'},
+ {a:'snow',b:'hill',kind:'amplify',detail:'Icy slopes accelerate downhill rolls.'},
+ {a:'snow',b:'wall',kind:'amplify',detail:'Icy rebounds retain more speed.'},
+ {a:'snow',b:'pinball',kind:'setup',detail:'Longer sliding approaches feed rebounds.'},
+ {a:'snow',b:'mud',kind:'counter',detail:'Mud cancels ice momentum in the overlap.'},
+ {a:'hill',b:'sinkhole',kind:'setup',detail:'Downhill roll into a hole placed beside the hill.'},
+ {a:'hill',b:'wall',kind:'setup',detail:'Deflect rolling balls off a barrier.'},
+ {a:'hill',b:'wind',kind:'amplify',detail:'Gust adds to the slope acceleration.'},
+ {a:'hill',b:'mud',kind:'counter',detail:'Mud brakes rolling balls on the slope.'},
+ {a:'wind',b:'sinkhole',kind:'setup',detail:'Push a loose ball toward a hole.'},
+ {a:'wind',b:'wall',kind:'setup',detail:'Redirect a gust-driven ball across the pitch.'},
+ {a:'wind',b:'pinball',kind:'setup',detail:'Feed a moving ball into the bumpers.'},
+ {a:'wind',b:'mud',kind:'counter',detail:'Sticky ground resists gusts.'},
+ {a:'wall',b:'sinkhole',kind:'setup',detail:'Use the rebound to feed a hole.'},
+ {a:'wall',b:'pinball',kind:'setup',detail:'Create a ricochet corridor.'},
+ {a:'wall',b:'mud',kind:'setup',detail:'Trap loose balls in a slow channel.'},
+ {a:'mud',b:'sinkhole',kind:'setup',detail:'Slow runners trying to escape the hole.'},
+ {a:'pinball',b:'sinkhole',kind:'setup',detail:'Bounce a low ball into the hole.'}
+]);
+export const DEFAULT_ENVIRONMENT=Object.freeze(['lightning','snow','sinkhole']);
+export function validLoadout(ids){return Array.isArray(ids)&&ids.length===3&&new Set(ids).size===3&&ids.every(id=>Object.hasOwn(ENVIRONMENT,id));}
+export function createEnvironment({sim,field,dt,event,resetPlayer,loadout=DEFAULT_ENVIRONMENT}){
+ if(!validLoadout(loadout))throw Error('Choose exactly three distinct environmental effects');
+ const equipped=[...loadout],legacy=createMutations({sim,field,dt,event,resetPlayer});
+ const active=new Map(),ready=new Map(),used=new Set(),stunned=new Map(),motion=new Map();
+ const metrics={activations:0,reuses:0,strikes:0,stuns:0,iceSteps:0,mudSteps:0,hillRolls:0,windRolls:0,wallHits:0,synergies:{}};
+ let tick=0,previousPlayers=new Map();
+ const ticks=s=>Math.round(s/dt);
+ const isPlay=()=>sim.matchState==='play'&&!sim.setPieceType;
+ const inZone=(id,p)=>{const e=active.get(id);return !!e&&dist(e,p)<=e.r;};
+ const count=(a,b)=>{const k=[a,b].sort().join('+');metrics.synergies[k]=(metrics.synergies[k]||0)+1;};
+ const canActivate=()=>isPlay()&&legacy.snapshot(p=>p).canActivate;
+ const remaining=id=>Math.max(0,((ready.get(id)||0)-tick)*dt);
+ function activate(id,target){
+  if(!equipped.includes(id)||active.has(id)||remaining(id)>0||!canActivate()||!target||!Number.isFinite(target.x)||!Number.isFinite(target.y))return false;
+  const d=ENVIRONMENT[id],r=d.radius,x=clamp(target.x,Math.max(8,r+1),field.width-Math.max(8,r+1)),y=clamp(target.y,r+1,field.height-r-1);
+  const e={id,x,y,r,until:tick+ticks(d.duration),nextStrike:tick+ticks(.45)};
+  if(id==='sinkhole'||id==='pinball'){
+   legacy.used.delete(id);
+   if(!legacy.activate(id,{x,y}))return false;
+  }else event(d.name+'!', 'A','mutation');
+  if(used.has(id))metrics.reuses++;used.add(id);active.set(id,e);ready.set(id,e.until+ticks(d.cooldown));metrics.activations++;return true;
+ }
+ function unfreeze(p){p.sundayStunned=false;stunned.delete(p);}
+ function recoverAll(){legacy.recoverAll();for(const p of stunned.keys())unfreeze(p);motion.clear();}
+ function before(){
+  tick++;
+  for(const [id,e] of active)if(tick>=e.until){active.delete(id);if(id!=='sinkhole'&&id!=='pinball')event(ENVIRONMENT[id].name+' ENDED','A','mutation');}
+  for(const [p,t] of stunned)if(tick>=t||!isPlay()||p.isSentOff)unfreeze(p);
+  const proceed=legacy.before();
+  previousPlayers=new Map(sim.players.map(p=>[p,{x:p.x,y:p.y}]));
+  if(!isPlay())motion.clear();
+  return proceed;
+ }
+ function strike(e){
+  metrics.strikes++;e.flashUntil=tick+ticks(.20);
+  const b=sim.ball;
+  for(const p of sim.players){
+   if(p.team!=='B'||p.role==='GK'||p.isSentOff||stunned.has(p))continue;
+   const ice=inZone('snow',p),mud=inZone('mud',p),range=e.r*(ice?1.25:1);
+   if(dist(p,e)>range)continue;
+   if(ice)count('lightning','snow');if(mud)count('lightning','mud');
+   stunned.set(p,tick+ticks(mud?2.5:1.8));p.sundayStunned=true;resetPlayer(p);zero(p);metrics.stuns++;
+   if(b.owner===p){b.owner=null;b.x=p.x;b.y=p.y;b.vx=b.vy=b.vz=0;b.z=0;b.isShot=false;}
+  }
+  event('LIGHTNING STRIKE!', 'A','mutation');
+ }
+ function constrainPlayer(p,old){
+  if(!old||p.isSentOff)return;
+  if(stunned.has(p)){p.x=old.x;p.y=old.y;zero(p);return;}
+  const dx=p.x-old.x,dy=p.y-old.y,ice=inZone('snow',p),mud=inZone('mud',p),hill=active.get('hill');
+  let mx=dx,my=dy;
+  if(ice&&!mud){const v=motion.get(p)||{x:dx,y:dy};mx=.62*dx+.38*v.x;my=.62*dy+.38*v.y;metrics.iceSteps++;}
+  if(mud){mx*=.53;my*=.53;metrics.mudSteps++;if(ice)count('snow','mud');}
+  if(hill&&dist(p,hill)<hill.r&&dist(p,hill)<dist(old,hill)){mx*=.76;my*=.76;}
+  p.x=clamp(old.x+mx,.2,field.width-.2);p.y=clamp(old.y+my,.2,field.height-.2);
+  motion.set(p,{x:mx,y:my});
+  const w=active.get('wall');
+  if(w&&Math.abs(p.y-w.y)<w.r+.35&&(Math.abs(p.x-w.x)<.65||(old.x-w.x)*(p.x-w.x)<0)){p.x=w.x+(old.x<=w.x?-.66:.66);zero(p);motion.delete(p);}
+ }
+ function after(prev){
+  if(!isPlay())return;
+  const cloud=active.get('lightning');if(cloud&&tick>=cloud.nextStrike){strike(cloud);cloud.nextStrike=tick+ticks(2.4);}
+  for(const p of sim.players)if(!p.isSentOff&&p.role!=='GK')constrainPlayer(p,previousPlayers.get(p));
+  const b=sim.ball;if(b.owner&&!b.owner.isSentOff){b.x=b.owner.x;b.y=b.owner.y;}
+  if(!b.owner&&b.z<.65&&!legacy.snapshot(p=>p).ballHidden){
+   const ice=inZone('snow',b),mud=inZone('mud',b),h=active.get('hill'),wind=active.get('wind'),w=active.get('wall');
+   if(ice&&!mud){b.vx*=1.012;b.vy*=1.012;}
+   if(h&&dist(b,h)<h.r){const d=Math.max(.25,dist(b,h)),a=dt*13*(ice&&!mud?1.7:1);b.vx+=(b.x-h.x)/d*a;b.vy+=(b.y-h.y)/d*a;metrics.hillRolls++;if(ice&&!mud)count('hill','snow');}
+   if(wind&&dist(b,wind)<wind.r){b.vx+=(sim.isSecondHalf?.()?-1:1)*dt*9;metrics.windRolls++;if(h&&dist(b,h)<h.r)count('hill','wind');}
+   if(mud){b.vx*=.88;b.vy*=.88;if(h&&dist(b,h)<h.r)count('hill','mud');if(wind&&dist(b,wind)<wind.r)count('mud','wind');}
+   if(w&&(prev.x-w.x)*(b.x-w.x)<=0&&Math.abs(b.x-prev.x)>.0001){
+    const t=clamp((w.x-prev.x)/(b.x-prev.x),0,1),y=prev.y+(b.y-prev.y)*t;
+    if(Math.abs(y-w.y)<w.r){b.x=w.x+(prev.x<=w.x?-.18:.18);b.y=y;b.vx=-b.vx*(ice&&!mud?.98:.76);metrics.wallHits++;if(ice&&!mud)count('snow','wall');}
+   }
+   const v=Math.hypot(b.vx,b.vy);if(v>65){b.vx*=65/v;b.vy*=65/v;}
+  }
+  legacy.after(prev);
+ }
+ function snapshot(project){
+  const base=legacy.snapshot(project);
+  return {...base,loadout:equipped.slice(),used:[...used],canActivate:canActivate(),active:[...active.values()].map(e=>({id:e.id,seconds:Math.max(0,(e.until-tick)*dt)})),
+   cooldowns:Object.fromEntries(equipped.map(id=>[id,remaining(id)])),
+   geometry:[...base.geometry,...[...active.values()].filter(e=>e.id!=='sinkhole'&&e.id!=='pinball').map(e=>({...project(e),kind:e.id,radius:e.r/field.height*68,depthRadius:e.r/field.width*94,flash:(e.flashUntil||0)>tick}))],
+   stunned:[...stunned.keys()].map(p=>sim.players.indexOf(p)),metrics:{...base.metrics,...metrics,synergies:{...metrics.synergies}}};
+ }
+ return {activate,before,after,snapshot,metrics,active,used,fallen:legacy.fallen,recoverAll,shot(){}};
+}
