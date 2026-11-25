@@ -17,7 +17,7 @@ if(git('rev-parse','HEAD')!==pin)throw new Error('Soccer-JS revision mismatch');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
 const license=readFileSync(resolve(upstream,'LICENSE'),'utf8');
-const entry="export {createSoccerMatch,SOCCER_STEP,HALF_PLANS,TOUCHLINE_CALLS} from "+JSON.stringify(adapter)+";\nexport {AUTO_TRAITS} from "+JSON.stringify(resolve(root,'src/engine.js'))+";";
+const entry="export {createSoccerMatch,SOCCER_STEP,CHIPS,chipOffers,RELOAD_COST} from "+JSON.stringify(adapter)+";\nexport {AUTO_TRAITS} from "+JSON.stringify(resolve(root,'src/engine.js'))+";";
 const result=await build({stdin:{contents:entry,resolveDir:root,sourcefile:'sunday-soccer-entry.js'},bundle:true,platform:'browser',format:'esm',target:'es2022',minify:true,write:false,legalComments:'inline',banner:{js:'/* Generated SUNDAY Soccer-JS bundle; upstream '+pin+'\\n'+license.replaceAll('*/','* /')+'\\n*/'}});
 const bytes=result.outputFiles[0].contents;
 for(const path of ['construct/scripts/engine.js','public/construct/scripts/project/engine.js'])writeFileSync(resolve(root,path),bytes);

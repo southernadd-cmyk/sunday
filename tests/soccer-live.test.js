@@ -21,22 +21,35 @@ test('all six traits can initialise genuine upstream matches',async()=>{
  for(const trait of Object.keys(AUTO_TRAITS)){const m=await createSoccerMatch(12,[trait],0,300);for(let i=0;i<100;i++)m.step();assert.equal(m.actors.length,22);assert.equal(m.stepSeconds,SOCCER_STEP);}
 });
 
-test('half-time plans influence second-half play, not scores directly',async()=>{
- async function half(plan){
-  const m=await createSoccerMatch(9,['touch'],0,300);
-  for(let i=0;i<10000&&m.phase!=='halftime';i++)m.step();
-  assert.equal(m.phase,'halftime');const first={score:[...m.score],stats:JSON.parse(JSON.stringify(m.stats))};
-  assert.ok(m.chooseHalfPlan(plan));assert.deepEqual(m.score,first.score);assert.equal(m.callsLeft,2);
-  for(let i=0;i<10000&&!m.finished;i++)m.step();
-  assert.ok(m.finished);return {first,score:m.score,stats:m.stats};
- }
- const attack=await half('attack'),protect=await half('protect');assert.deepEqual(attack.first,protect.first);assert.notDeepEqual(attack.stats,protect.stats);
-});
-test('touchline call expires on the match clock and cannot be stacked',async()=>{
- const m=await createSoccerMatch(3,[],0,300);
- assert.equal(m.callTouchline('press'),false);
+
+test('chips modify actual player attributes, stack, expire, and preserve opposition stats',async()=>{
+ const m=await createSoccerMatch(9,[],0,300);
+ for(const id of ['nitro','magnet','double'])assert.ok(m.grantChip(id));
+ assert.equal(m.grantChip('nitro'),false);assert.equal(m.useChip('nitro'),false);
  for(let i=0;i<500&&m.phase!=='play';i++)m.step();
- assert.equal(m.phase,'play');const before=m.tacticalSettings();assert.equal(m.callTouchline('press'),true);assert.equal(m.callsLeft,1);assert.equal(m.callTouchline('push'),false);assert.ok(m.tacticalSettings().DEFENSIVE_PRESS_INTENSITY>before.DEFENSIVE_PRESS_INTENSITY);
- for(let i=0;i<5000&&m.call;i++)m.step();
- assert.equal(m.call,null);assert.deepEqual(m.tacticalSettings(),before);
+ assert.equal(m.phase,'play');const before=m.playerAttributes();
+ assert.ok(m.useChip('double'));assert.ok(m.useChip('nitro'));assert.ok(m.useChip('magnet'));
+ assert.equal(m.chips.find(c=>c.id==='double').status,'spent');
+ assert.equal(m.chipStats.combos,1);
+ const n=m.chips.find(c=>c.id==='nitro');assert.ok(Math.abs(n.until-m.time-300*24/90)<.01);
+ const now=m.playerAttributes();assert.ok(now.some((p,i)=>p.team==='A'&&p.role!=='GK'&&p.speed>before[i].speed&&p.passing>before[i].passing));
+ assert.ok(now.every((p,i)=>p.team==='A'||p.speed===before[i].speed));assert.equal(m.useChip('nitro'),false);
+ for(let i=0;i<10000&&n.status==='active';i++)m.step();
+ assert.equal(n.status,'spent');assert.ok(m.playerAttributes().every((p,i)=>p.speed===before[i].speed));
+ assert.ok(m.charge>=0&&m.charge<=8);
+});
+test('real match events earn charge and fund a reload, which cannot repeat indefinitely',async()=>{
+ const m=await createSoccerMatch(1,[],0,300);assert.ok(m.grantChip('nitro'));
+ for(let i=0;i<500&&m.phase!=='play';i++)m.step();assert.ok(m.useChip('nitro'));
+ for(let i=0;i<10000&&!(m.phase==='play'&&m.chips[0].status==='spent'&&m.charge>=4);i++)m.step();
+ assert.ok(m.charge>=4);const charge=m.charge;assert.ok(m.useChip('nitro'));assert.equal(m.charge,charge-4);assert.equal(m.chips[0].reloaded,true);
+ for(let i=0;i<10000&&m.chips[0].status==='active';i++)m.step();assert.equal(m.useChip('nitro'),false);
+});
+test('power-ups alter the actual simulation rather than only a display number',async()=>{
+ async function play(power){
+  const m=await createSoccerMatch(1,[],0,300);m.grantChip('nitro');
+  for(let i=0;i<500&&m.phase!=='play';i++)m.step();if(power)assert.ok(m.useChip('nitro'));
+  for(let i=0;i<600;i++)m.step();return m.actors.map(p=>[p.x,p.z]);
+ }
+ assert.notDeepEqual(await play(true),await play(false));
 });
