@@ -20,3 +20,7 @@ Old: 2.75 goals, 11.92 completed passes, 5.92 shots, 0/12 shotless matches. New:
 ## Reproducible upstream benchmark
 
 The separate External football engine evaluation workflow checks out the two exact candidate commits with read-only access, and runs six headless seeded matches each. The resulting JSON is printed as ENGINE_BENCHMARK in the job logs. This is intentionally outside the ordinary deployment gate. Candidate outcomes are pending until that workflow completes; no external engine is bundled into the game.
+
+## Selected direction: Soccer-JS
+
+The user prefers Soccer-JS. The next integration gate is a browser-targeted ESM adapter which runs the actual upstream simulator with bundled JSON presets, maps all 22 players and the independent ball into SUNDAY pitch coordinates, and applies the six existing behaviour cards through upstream AI knobs. The verification script checks full-time completion, stable finite snapshots, repeatable results and actual changes caused by trait choices. The MIT notice is included beside the experimental bundle. This is an integration proof only: the playable controller still uses the in-house engine until the adapter passes and the sprite pool is expanded for 11-a-side.

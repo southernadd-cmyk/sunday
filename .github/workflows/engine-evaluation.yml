@@ -26,6 +26,19 @@ jobs:
           cp scripts/engine-evaluation/soccer.cjs candidates/soccer-js/evaluate.cjs
           cd candidates/soccer-js
           node evaluate.cjs
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Bundle Soccer-JS as a render-independent browser module
+        run: |
+          cp scripts/engine-evaluation/soccer-adapter.js candidates/soccer-js/sunday-adapter.js
+          mkdir -p adapter-proof
+          ./node_modules/.bin/esbuild candidates/soccer-js/sunday-adapter.js --bundle --platform=browser --format=esm --outfile=adapter-proof/soccer-adapter.mjs
+          cp candidates/soccer-js/LICENSE adapter-proof/LICENSE
+          cp scripts/engine-evaluation/verify-soccer-adapter.mjs adapter-proof/verify.mjs
+          node adapter-proof/verify.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: soccer-js-adapter-proof
+          path: adapter-proof
   evofootball:
     runs-on: ubuntu-latest
     timeout-minutes: 6
