@@ -135,7 +135,7 @@ export class Sunday{
   this.buttons.push({x,y,w,h,action,enabled,label});
  }
 
- p
+ panel(width,height){const u=this.u,v=this.v,w=Math.min(width*u,v.width-26*u),h=Math.min(height*u,v.height-170*u),x=v.left+(v.width-w)/2,y=v.top+(v.height-h)/2;this.rect(x,y,w,h);return {x,y,w,h,u};}
  refresh(){
   if(!this.v)return;
   this.canvas.clearCanvas(C.clear);this.plans.clearCanvas(C.clear);this.ring.isVisible=false;this.ghost.isVisible=false;this.buttons=[];this.labelCount=0;

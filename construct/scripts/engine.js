@@ -510,8 +510,8 @@ const attackDir=side=>side===0?-1:1;
 export class AutoMatch{
  constructor(seed=1,traits=[],opponent=0,duration=75){
   this.seed=seed>>>0;this.rng=this.seed||1;this.traits=[...new Set(traits)];this.opponent=opponent;this.duration=duration;
-  this.time=0;this.finished=false;this.score=[0,0];this.stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackles:0,saves:0,interceptions:0,possession:0,bestChain:0}));this.events=[];this.chain=0;this.chainSide=-1;this.lastGain=[-99,-99];this.kickoffWait=0;
-  this.actors=Array.from({length:20},(_,id)=>({id,x:44,z:24,team:id===14||id===15?2:id>=16?3:autoSide(id),role:'',cool:0,pace:5.6+this.random()*.9}));
+  this.time=0;this.finished=false;this.score=[0,0];this.stats=[0,1].map(()=>({passes:0,completed:0,shots:0,tackles:0,saves:0,interceptions:0,possession:0,bestChain:0,progressive:0,through:0,blocks:0,loose:0}));this.events=[];this.chain=0;this.chainSide=-1;this.lastGain=[-99,-99];this.kickoffWait=0;this.possessionSide=null;this.pressers=[[],[]];this.shapeClock=0;this.lastPasser=null;
+  this.actors=Array.from({length:20},(_,id)=>({id,x:44,z:24,team:id===14||id===15?2:id>=16?3:autoSide(id),role:'',cool:0,vx:0,vz:0,pace:5.6+this.random()*.9}));
   this.actors[16].x=-29;this.actors[16].z=0;this.actors[17].x=44;this.actors[18].x=44;this.actors[19].x=-44;
   this.kickoff(this.seed%2);this.event('KICK OFF',-1,'match');
  }
@@ -519,14 +519,14 @@ export class AutoMatch{
  has(side,trait){return side===0?this.traits.includes(trait):[['shield'],['hunt','touch'],['overlap','rifle']][Math.min(2,this.opponent)].includes(trait);}
  event(text,side,kind='play'){this.events.unshift({time:this.time,text,side,kind});if(this.events.length>8)this.events.pop();}
  kickoff(side){
-  for(let t=0;t<2;t++){const dir=attackDir(t);AUTO_TEAMS[t].slice(0,7).forEach((id,i)=>{const [x,z]=AUTO_SHAPE[i];Object.assign(this.actors[id],{x:x*(t===0?1:-1),z:z*-dir*.58-dir*(t===side?0:9),cool:0});});const g=this.actors[AUTO_TEAMS[t][7]];Object.assign(g,{x:0,z:-dir*43,cool:0});}
-  const id=AUTO_TEAMS[side][3];Object.assign(this.actors[id],{x:0,z:attackDir(side)*.5});this.owner=id;this.ball={x:0,z:0,y:.6};this.flight=null;this.chain=0;this.chainSide=side;this.decision=.4;this.protect=.9;this.kickoffWait=.65;this.lastGain[side]=this.time;
+  for(let t=0;t<2;t++){const dir=attackDir(t);AUTO_TEAMS[t].slice(0,7).forEach((id,i)=>{const [x,z]=AUTO_SHAPE[i];Object.assign(this.actors[id],{x:x*(t===0?1:-1),z:z*-dir*.58-dir*(t===side?0:9),cool:0,vx:0,vz:0,role:['ST','LW','RW','CM','LB','RB','CB'][i]});});const g=this.actors[AUTO_TEAMS[t][7]];Object.assign(g,{x:0,z:-dir*43,cool:0,vx:0,vz:0,role:'GK'});}
+  const id=AUTO_TEAMS[side][3];Object.assign(this.actors[id],{x:0,z:attackDir(side)*.5});this.owner=id;this.ball={x:0,z:0,y:.6};this.flight=null;this.chain=0;this.chainSide=side;this.decision=.4;this.protect=.9;this.kickoffWait=.65;this.lastGain[side]=this.time;this.possessionSide=side;this.shapeClock=0;this.lastPasser=null;
  }
  foot(id){const a=this.actors[id];return {x:a.x+.35,z:a.z+attackDir(autoSide(id))*.65,y:.6};}
  gain(id,kind){
   const side=autoSide(id),prior=this.flight?.side??(this.owner==null?-1:autoSide(this.owner));
-  if(prior!==side||this.chainSide!==side){this.chain=0;this.chainSide=side;this.lastGain[side]=this.time;}
-  this.owner=id;this.flight=null;this.ball=this.foot(id);this.protect=(id===14||id===15)?2.2:1.25;this.decision=this.has(side,'touch')?.17:.32;
+  if(prior!==side||this.chainSide!==side){this.lastPasser=null;this.chain=0;this.chainSide=side;this.lastGain[side]=this.time;}
+  this.owner=id;this.flight=null;this.ball=this.foot(id);this.possessionSide=side;this.shapeClock=0;this.protect=(id===14||id===15)?2.2:1.25;this.decision=this.has(side,'touch')?.17:.32;
   if(kind==='tackle'){this.stats[side].tackles++;this.event('BALL WON',side,'tackle');}
   if(kind==='intercept'){this.stats[side].interceptions++;this.event('INTERCEPTION',side,'tackle');}
   if(kind==='save'){this.stats[side].saves++;this.event('KEEPER SAVES',side,'save');}
@@ -536,18 +536,39 @@ export class AutoMatch{
   this.flight={kind,from:origin,target,receiver,side,kicker:id,t:0,duration:Math.max(.15,distance(origin,target)/speed)};
   this.owner=null;
   if(kind==='shot'){this.stats[side].shots++;this.event('SHOT!',side,'shot');}
-  else{this.stats[side].passes++;}
+  else{this.stats[side].passes++;this.lastPasser=id;if((target.z-origin.z)*attackDir(side)>7)this.stats[side].progressive++;if(receiver!=null&&distance(this.actors[receiver],target)>3.2){this.stats[side].through++;this.event('THROUGH BALL',side,'pass');}}
  }
  goal(side){
   this.score[side]++;this.event('GOAL! '+this.score[0]+'–'+this.score[1],side,'goal');this.kickoff(1-side);this.kickoffWait=1.1;
  }
  move(a,target,speed){
-  const p=toward(a,{x:clamp(target.x,-32,32),z:clamp(target.z,-44,44)},speed*AUTO_STEP);a.x=p.x;a.z=p.z;
+  const dx=clamp(target.x,-32,32)-a.x,dz=clamp(target.z,-44,44)-a.z,d=Math.hypot(dx,dz),v=Math.min(speed,d/Math.max(AUTO_STEP,.22)),blend=Math.min(1,AUTO_STEP*10);a.vx+=(dx/(d||1)*v-a.vx)*blend;a.vz+=(dz/(d||1)*v-a.vz)*blend;a.x=clamp(a.x+a.vx*AUTO_STEP,-32,32);a.z=clamp(a.z+a.vz*AUTO_STEP,-44,44);
  }
  laneClear(a,b,opponents){
   const dx=b.x-a.x,dz=b.z-a.z,len=dx*dx+dz*dz||1;
   let min=20;
   for(const p of opponents){const f=clamp(((p.x-a.x)*dx+(p.z-a.z)*dz)/len,0,1);min=Math.min(min,distance(p,{x:a.x+dx*f,z:a.z+dz*f}));}return min;
+ }
+ // Compare ball arrival to each defender's arrival at points along the passing corridor.
+ passSafety(a,target,opponents,speed=20){
+  const d=distance(a,target);let margin=3;
+  for(const o of opponents){
+   if(o.role==='GK'&&distance(o,target)>9)continue;
+   for(const f of [.25,.5,.75,1]){const q=lerp(a,target,f),arrival=d*f/speed,reach=Math.max(0,distance(o,q)-1.15)/(o.pace+.5)+.12;margin=Math.min(margin,reach-arrival);}
+  }
+  return margin;
+ }
+ supportTarget(a,side,b,attacking,carrier){
+  const dir=attackDir(side),i=AUTO_TEAMS[side].indexOf(a.id),[baseX,baseZ]=AUTO_SHAPE[i],wide=i===1||i===2,back=i>=4;
+  let depth=clamp(b.z*dir,-32,32),line=depth+baseZ*-.64+(attacking?(back?-3:8):this.has(side,'shield')?-10:-5);
+  const width=attacking?1:.74;let x=baseX*width*(side===0?1:-1)+b.x*(wide?.10:.24);
+  if(attacking&&carrier&&i===3){line=depth-7;x=clamp(b.x*.4+(carrier.x>0?-7:7),-18,18);}
+  if(attacking&&wide&&this.has(side,'overlap'))line+=8;
+  if(attacking&&back&&this.has(side,'overlap')&&i!==6&&Math.sign(x)===Math.sign(b.x)&&Math.abs(b.x)>9){line+=15;x=Math.sign(x)*29;}
+  if(attacking&&this.has(side,'counter')&&this.time-this.lastGain[side]<4&&!back)line+=7;
+  if(!attacking&&back){line=Math.min(line,depth-8);const own=attackDir(side)*-38;line=Math.max(line,own*dir);}
+  // Central striker stays goal-side of midfield but cannot camp beyond the goal.
+  return {x:clamp(x,-30,30),z:clamp(line*dir,-40,40)};
  }
  decide(){
   if(this.owner==null)return;
@@ -560,11 +581,11 @@ export class AutoMatch{
    const error=(this.random()-.5)*(goalDist*.16+Math.max(0,4-pressure)*1.1);this.launch('shot',{...goal,x:goal.x+error});return;
   }
   const options=ids.slice(0,7).filter(i=>i!==a.id).map(id=>{
-   const p=this.actors[id],forward=(p.z-a.z)*dir,d=distance(a,p),target={x:p.x,z:clamp(p.z+dir*Math.min(3,d*.12),-43,43)},space=Math.min(...opp.map(o=>distance(o,target))),lane=this.laneClear(a,target,opp);
-   return {id,target,d,forward,score:forward*.65+Math.min(12,space)*.75+Math.min(8,lane)*1.3-d*.16+(this.random()-.5)*2,lane};
-  }).filter(p=>p.d>3&&p.d<38&&p.lane>1.1).sort((a,b)=>b.score-a.score);
+   const p=this.actors[id],d=distance(a,p),eta=d/20,target={x:clamp(p.x+p.vx*eta*.7,-31,31),z:clamp(p.z+p.vz*eta*.7+dir*Math.min(2,d*.06),-43,43)},forward=(target.z-a.z)*dir,space=Math.min(...opp.map(o=>distance(o,target))),lane=this.laneClear(a,target,opp),safety=this.passSafety(a,target,opp),gain=Math.max(0,goalDist-Math.hypot(target.x,dir*47-target.z));
+   return {id,target,d,forward,safety,score:forward*.48+gain*.35+Math.min(12,space)*.7+Math.min(8,lane)*.8+clamp(safety,-1,1.5)*5-d*.13-(id===this.lastPasser?3:0)+(this.random()-.5)*2,lane};
+  }).filter(p=>p.d>4&&p.d<38&&p.lane>1.1&&p.safety>-.22).sort((a,b)=>b.score-a.score);
   const best=options[0],one=this.has(side,'touch');
-  if(best&&(a.id===ids[7]||pressure<7||best.forward>4&&best.score>6||one&&best.score>5)){
+  if(best&&(a.id===ids[7]||pressure<5.5||best.forward>5&&best.score>8||one&&best.score>5)){
    this.launch('pass',best.target,best.id);return;
   }
   this.decision=one?.22:.42;
@@ -575,9 +596,10 @@ export class AutoMatch{
   if(this.time>=this.duration-1e-8){this.finished=true;this.event('FULL TIME',-1,'match');return;}
   if(this.kickoffWait>0){this.kickoffWait-=AUTO_STEP;return;}
   const owner=this.owner,poss=owner==null?this.flight?.side:autoSide(owner);if(poss!=null)this.stats[poss].possession+=AUTO_STEP;
-  const b={...this.ball},flight=this.flight;
+  const b={...this.ball},flight=this.flight;this.shapeClock-=AUTO_STEP;
+  if(this.shapeClock<=0){this.shapeClock=.28;for(let side=0;side<2;side++){const ids=AUTO_TEAMS[side].slice(0,7),count=this.has(side,'hunt')?2:1;this.pressers[side]=ids.sort((i,j)=>(distance(this.actors[i],b)-(this.pressers[side].includes(i)?2:0))-(distance(this.actors[j],b)-(this.pressers[side].includes(j)?2:0))).slice(0,count);}}
   for(let side=0;side<2;side++){
-   const ids=AUTO_TEAMS[side],dir=attackDir(side),attacking=poss===side,keeper=this.actors[ids[7]],pressers=ids.slice(0,7).sort((i,j)=>distance(this.actors[i],b)-distance(this.actors[j],b)).slice(0,this.has(side,'hunt')?2:1);
+   const ids=AUTO_TEAMS[side],dir=attackDir(side),attacking=poss===side,keeper=this.actors[ids[7]],pressers=this.pressers[side];
    const counter=this.has(side,'counter')&&this.time-this.lastGain[side]<4;
    for(let i=0;i<7;i++){
     const a=this.actors[ids[i]],wide=i===1||i===2,[baseX,baseZ]=AUTO_SHAPE[i];a.cool=Math.max(0,a.cool-AUTO_STEP);
@@ -586,13 +608,13 @@ export class AutoMatch{
      const goal={x:a.x*.48,z:dir*43},enemy=AUTO_TEAMS[1-side].map(id=>this.actors[id]).sort((x,y)=>distance(x,a)-distance(y,a))[0];
      target={x:goal.x+(distance(a,enemy)<5?(a.x>=enemy.x?6:-6):0),z:goal.z};speed*=.95;
     }else if(flight?.receiver===a.id){target=flight.target;speed+=.9;}
-    else if(!attacking&&pressers.includes(a.id)){target={x:b.x,z:b.z};speed+=this.has(side,'hunt')?1.6:.85;}
+    else if(!attacking&&pressers.includes(a.id)){const lead=owner!=null?this.actors[owner]:null;target={x:b.x+(lead?.vx||0)*.24,z:b.z+(lead?.vz||0)*.24};speed+=this.has(side,'hunt')?1.6:.85;}
     else{
-     const forward=attacking?(i<3?9:1):this.has(side,'shield')?-9:-4;
-     let z=b.z+dir*(baseZ*-1*.68+forward);
-     if(attacking&&wide&&this.has(side,'overlap')){z+=dir*12;speed+=.65;}
-     if(counter){z+=dir*8;speed+=1.4;}
-     target={x:baseX*(side===0?1:-1)+(wide?b.x*.12:b.x*.26),z:clamp(z,-40,40)};
+     target=this.supportTarget(a,side,b,attacking,owner==null?null:this.actors[owner]);
+     if(attacking&&wide&&this.has(side,'overlap'))speed+=.65;
+     if(counter&&i<4)speed+=1.1;
+     // Keep same-team players from occupying the same lane.
+     for(const id of ids.slice(0,7)){if(id===a.id)continue;const other=this.actors[id],d=distance(a,other);if(d<3.2&&d>.01){target.x+=(a.x-other.x)/d*(3.2-d)*1.8;target.z+=(a.z-other.z)/d*(3.2-d)*1.8;}}
     }
     this.move(a,target,speed);
    }
@@ -608,14 +630,14 @@ export class AutoMatch{
    this.ball={...lerp(f.from,f.target,p),y:.6+(f.kind==='shot'?Math.sin(p*Math.PI)*.65:0)};
    const defenders=AUTO_TEAMS[1-f.side].map(id=>this.actors[id]).filter(a=>a.id!==f.kicker);
    const hit=defenders.sort((a,b)=>distance(a,this.ball)-distance(b,this.ball)).find(a=>distance(a,this.ball)<(a.id===14||a.id===15?1.65:1.35)&&p>.08);
-   if(hit){this.gain(hit.id,hit.id===14||hit.id===15?'save':'intercept');return;}
+   if(hit){if(f.kind==='shot'&&hit.role!=='GK'){this.stats[1-f.side].blocks++;this.event('SHOT BLOCKED',1-f.side,'save');}this.gain(hit.id,hit.role==='GK'?(f.kind==='shot'?'save':'intercept'):'intercept');return;}
    if(p>=1){
     if(f.kind==='shot'){if(Math.abs(f.target.x)<=GOAL.right){this.goal(f.side);}else{this.event('JUST WIDE',f.side,'shot');this.gain(AUTO_TEAMS[1-f.side][7]);}return;}
     const candidate=AUTO_TEAMS[f.side].map(id=>this.actors[id]).sort((a,b)=>distance(a,this.ball)-distance(b,this.ball))[0];
     const other=defenders[0];
     if(other&&distance(other,this.ball)<distance(candidate,this.ball)){this.gain(other.id,'intercept');}
     else if(distance(candidate,this.ball)<3.8){this.stats[f.side].completed++;this.chain++;this.stats[f.side].bestChain=Math.max(this.chain,this.stats[f.side].bestChain);this.gain(candidate.id);if(this.chain===3||this.chain===5)this.event(this.chain+'-PASS MOVE',f.side,'combo');}
-    else{this.flight=null;this.owner=null;}
+    else{this.flight=null;this.owner=null;this.stats[f.side].loose++;}
    }
   }else if(this.owner!=null){
    this.ball=this.foot(this.owner);const side=autoSide(this.owner),a=this.actors[this.owner];
