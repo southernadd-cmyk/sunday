@@ -2,7 +2,8 @@
 // This file is copied to the upstream checkout and bundled as a browser ESM.
 // No upstream rendering, audio, network fetches, or DOM controls are needed.
 import {systemAssignment,resolveSystem,systemCanPress,freeKickLayout,planDirectFreeKick,adaptiveTactic,ADAPTIVE_REVIEW_SECONDS} from './five-tactics.js';
-import {createMutations,MUTATIONS} from './mutations.js';
+import {createMutations,MUTATIONS,createEnvironment,ENVIRONMENT,ENVIRONMENT_GRAPH,DEFAULT_ENVIRONMENT,validLoadout} from './mutations.js';
+export {ENVIRONMENT,ENVIRONMENT_GRAPH,DEFAULT_ENVIRONMENT,validLoadout};
 import {possessionIntent,possessionAction} from './possession-intent.js';
 const {PlayerStates,computeShootKick,computeTackleType}=require('./kernel/core/entities/player.js');
 const {Simulator,MatchStates}=require('./kernel/providers/simulator/simulator.js');
@@ -374,10 +375,11 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   onProgressivePass({team}){stats[side(team)].progressive++;},
   onBlock(info){if(info?.team==='A'||info?.team==='B')stats[side(info.team)].blocks++;event('SHOT BLOCKED',info?.team,'save');}
  };
- if(intent&&options.mutations===true){
-  mutations=createMutations({sim,field,dt:SOCCER_STEP,event,resetPlayer:p=>{p.fsm.changeState(PlayerStates.Idle);p._currentSpeed=0;p.receiveTarget=null;p.passTarget=null;p.shotAim=null;}});
+ if(intent&&(options.mutations===true||options.environment)){
+  const config={sim,field,dt:SOCCER_STEP,event,resetPlayer:p=>{p.fsm.changeState(PlayerStates.Idle);p._currentSpeed=0;p.receiveTarget=null;p.passTarget=null;p.shotAim=null;}};
+  mutations=options.environment?createEnvironment({...config,loadout:options.environment===true?DEFAULT_ENVIRONMENT:options.environment}):createMutations(config);
   state.activateMutation=(id,target)=>{const point=target&&typeof target==='object'?{x:(.5-target.z/94)*field.width,y:(target.x/68+.5)*field.height}:target;const ok=mutations.activate(id,point);snapshot();return ok;};
-  state.mutationDefinitions=MUTATIONS;
+  state.mutationDefinitions=options.environment?ENVIRONMENT:MUTATIONS;
   if(options.testHooks)state.mutationTest={controller:mutations,sim,field,computeShootKick,computeTackleType};
  }
  function point(p){return {x:(p.y/field.height-.5)*68,z:(.5-p.x/field.width)*94};}
@@ -417,7 +419,7 @@ export async function createSoccerMatch(seed,traits=[],opponent=0,duration=75,fo
   }
  }
  function snapshot(){
-  state.actors=sim.players.map((p,i)=>({id:i,...point(p),team:p.role==='GK'?2:side(p.team),side:side(p.team),role:p.role,assignment:zones?p.sundayAssignment||null:null,visible:!p.isSentOff,size:p.sundayMutationSize||1,turbo:p.sundayMutationSpeed>1,cannon:p.sundayMutationShot>1,sliding:!!p.isSliding,frame:Math.floor(frames/3)%2}));
+  state.actors=sim.players.map((p,i)=>({id:i,...point(p),team:p.role==='GK'?2:side(p.team),side:side(p.team),role:p.role,assignment:zones?p.sundayAssignment||null:null,visible:!p.isSentOff,size:p.sundayMutationSize||1,turbo:p.sundayMutationSpeed>1,cannon:p.sundayMutationShot>1,sliding:!!p.isSliding,stunned:!!p.sundayStunned,frame:Math.floor(frames/3)%2}));
   state.ball={...point(sim.ball),y:Math.max(0,sim.ball.z||0)+.4};
   state.score=[sim.scoreA,sim.scoreB];state.time=clamp(sim.matchTimer/5400*duration,0,duration);
   if(mutations)state.mutations=mutations.snapshot(point);
