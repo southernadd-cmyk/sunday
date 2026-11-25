@@ -28,11 +28,6 @@ function runtime({width=960,height=640,left=0,top=0,cssScale=1}={}){
  }
  return {objects:types,layout:{getLayer:()=>layer},addEventListener:(name,fn)=>handlers.set(name,fn),handlers,draws,layer,viewport};
 }
-function click(g,text){
- const b=[...g.buttons].reverse().find(b=>b.label.text===text);assert.ok(b,'Missing button: '+text);
- const [clientX,clientY]=g.field.layerToCssPx(b.x+b.w/2,b.y+b.h/2),event={pointerId:1,button:0,clientX,clientY};
- g.pointerDown(event);g.pointerUp(event);
-}
 test('native Construct package references existing types, scripts, layouts and original frames',()=>{
  const project=json('project.c3proj'),layout=json('layouts/Saltmere.json'),uids=new Set(),sids=new Set();
  assert.equal(project.runtime,'c3');assert.equal(layout.layers.length,2);
@@ -53,14 +48,16 @@ test('native Construct package references existing types, scripts, layouts and o
 
 async function start(g){await g.startAuto(12345);assert.equal(g.auto.phase,'match');assert.equal(g.auto.match.actors.length,10);assert.equal(g.actors.filter(a=>a.isVisible).length,10);assert.ok(g.auto.match.adaptiveOpponent);assert.ok(g.auto.match.mutations);}
 function openPlay(g){for(let i=0;i<800&&!g.auto.match.mutations.canActivate;i++)g.advanceAuto(.05);assert.ok(g.auto.match.mutations.canActivate);}
-function pitchClick(g,x,y){const [clientX,clientY]=g.field.layerToCssPx(x,y),e={pointerId:1,button:0,clientX,clientY};g.pointerDown(e);g.pointerUp(e);}
-function inBounds(g){for(const b of g.buttons){assert.ok(b.x>=g.v.left-1e-6&&b.x+b.w<=g.v.right+1e-6,b.label.text+' horizontal');assert.ok(b.y>=g.v.top-1e-6&&b.y+b.h<=g.v.bottom+1e-6,b.label.text+' vertical');}}
-test('native title and instructions launch current five-a-side mutation engine',async()=>{
- const g=new Sunday(runtime());assert.deepEqual(g.buttons.map(b=>b.label.text),['START GAME','INSTRUCTIONS']);
- click(g,'INSTRUCTIONS');click(g,'BACK');await start(g);
- assert.ok(g.buttons.some(b=>b.label.text==='GIANT'));assert.ok(g.buttons.some(b=>b.label.text==='SINKHOLE'));
- assert.ok(!g.buttons.some(b=>/CHIP SHOP|NITRO|SPRINT/.test(b.label.text)));
- click(g,'PAUSE');const time=g.auto.match.time;g.advanceAuto(2);assert.equal(g.auto.match.time,time);click(g,'PLAY');
+function event(g,x,y,pointerId=1){const [clientX,clientY]=g.field.layerToCssPx(x,y);return {pointerId,button:0,clientX,clientY};}
+function tap(g,x,y){const e=event(g,x,y);g.pointerDown(e);g.pointerUp(e);}
+function grab(g,id){const t=g.tokens.find(t=>t.id===id);assert.ok(t?.enabled,id+' must be ready');const e=event(g,t.x+t.w/2,t.y+t.h/2);g.pointerDown(e);assert.equal(g.auto.armed,id);return e;}
+function release(g,x,y){const e=event(g,x,y);g.pointerMove(e);g.pointerUp(e);}
+function inBounds(g){assert.equal(g.buttons,undefined);for(const t of g.tokens){assert.ok(t.x>=g.v.left-1e-6&&t.x+t.w<=g.v.right+1e-6,t.id+' horizontal');assert.ok(t.y>=g.v.top-1e-6&&t.y+t.h<=g.v.bottom+1e-6,t.id+' vertical');}}
+test('native title uses tap anywhere and match has no buttons',async()=>{
+ const g=new Sunday(runtime());assert.equal(g.tokens.length,0);assert.equal(g.buttons,undefined);
+ tap(g,480,320);assert.equal(g.auto.phase,'loading');for(let i=0;i<100&&g.auto.phase==='loading';i++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(g.auto.phase,'match');
+ assert.equal(g.auto.match.actors.length,10);assert.equal(g.tokens.length,6);assert.ok(g.tokens.some(t=>t.id==='giant'));
+ tap(g,480,12);const time=g.auto.match.time;g.advanceAuto(2);assert.equal(g.auto.match.time,time);assert.equal(g.auto.paused,true);tap(g,480,12);assert.equal(g.auto.paused,false);
 });
 test('native pitch stays vertical, scrolls, and inverse coordinates round trip',async()=>{
  for(const opts of [{},{width:960,height:2000,left:130,top:-600,cssScale:.375},{width:960,height:540,cssScale:.65}]){
@@ -69,24 +66,26 @@ test('native pitch stays vertical, scrolls, and inverse coordinates round trip',
   const old=g.camera;g.auto.match.ball.z=40;g.drawAuto(1);assert.ok(g.camera>=old);assert.equal(g.actors.filter(a=>a.isVisible).length,10);
  }
 });
-test('native mutation selection freezes the match, targets a player and restores time',async()=>{
- const g=new Sunday(runtime());await start(g);openPlay(g);
- const m=g.auto.match;
- // Choose an eligible visible player, adjusting camera as the actual game does.
- const p=m.actors.find(a=>a.side===0&&a.role==='CF'&&a.visible);g.camera=p.z;g.drawAuto(0);
- click(g,'GIANT');assert.equal(g.auto.armed,'giant');const t=m.time;g.advanceAuto(1);assert.equal(m.time,t);
- const a=g.point(p);pitchClick(g,a.x,a.y);assert.equal(g.auto.armed,null);assert.ok(m.mutations.used.includes('giant'));
- assert.equal(m.actors.find(x=>x.id===p.id).size,3);assert.ok(g.actors[p.id].width>g.actors.find((x,i)=>i!==p.id&&x.isVisible).width*2.5);
- click(g,'SQUEEZE');assert.ok(m.mutations.squeeze);assert.ok(m.mutations.active.length===2);
- click(g,'SINKHOLE');assert.equal(g.auto.armed,'sinkhole');click(g,'CANCEL');assert.equal(g.auto.armed,null);
+test('drag a token directly onto a player or the pitch; invalid drops cost nothing',async()=>{
+ for(const opts of [{},{width:960,height:2000,left:130,top:-600,cssScale:.375}]){
+  const g=new Sunday(runtime(opts));await start(g);openPlay(g);
+  const m=g.auto.match,p=m.actors.find(a=>a.side===0&&a.role==='CF'&&a.visible);g.camera=p.z;g.drawAuto(0);
+  const e=grab(g,'giant'),t=m.time;g.advanceAuto(1);assert.equal(m.time,t);g.pointerUp(e);assert.equal(g.auto.armed,null);assert.equal(m.mutations.used.length,0);
+  grab(g,'giant');const a=g.point(p);release(g,a.x,a.y);assert.equal(g.auto.armed,null);assert.ok(m.mutations.used.includes('giant'));assert.equal(m.actors.find(x=>x.id===p.id).size,3);
+  grab(g,'squeeze');release(g,g.cx,g.layout.play.y+g.layout.play.h/2);assert.ok(m.mutations.squeeze);assert.ok(m.mutations.active.length===2);
+  grab(g,'sinkhole');release(g,g.cx,g.v.top);assert.ok(!m.mutations.used.includes('sinkhole'));assert.equal(g.auto.armed,null);
+  grab(g,'sinkhole');g.runtime.handlers.get('pointercancel')({pointerId:1});assert.equal(g.auto.armed,null);assert.equal(g.drag,null);
+  grab(g,'sinkhole');g.pointerUp(event(g,g.cx,g.v.top,2));assert.equal(g.auto.armed,'sinkhole');g.key({key:'Escape'});assert.equal(g.auto.armed,null);
+  grab(g,'sinkhole');const point=g.point({x:0,z:Math.max(-30,Math.min(30,g.camera))});release(g,point.x,point.y);assert.ok(m.mutations.used.includes('sinkhole'));
+ }
 });
-test('half-time, resume and full-time remain native game states',async()=>{
+test('half-time and full-time use screen taps, not menu buttons',async()=>{
  const g=new Sunday(runtime({width:960,height:540,cssScale:.65}));await start(g);
  g.auto.speed=4;
  for(let i=0;i<200&&g.auto.phase==='match';i++)g.advanceAuto(1);
- assert.equal(g.auto.phase,'halftime');const t=g.auto.match.time;g.advanceAuto(100);assert.equal(g.auto.match.time,t);inBounds(g);click(g,'SECOND HALF');
+ assert.equal(g.auto.phase,'halftime');const t=g.auto.match.time;g.advanceAuto(100);assert.equal(g.auto.match.time,t);assert.equal(g.tokens.length,0);tap(g,480,270);
  for(let i=0;i<200&&g.auto.phase==='match';i++)g.advanceAuto(1);
- assert.equal(g.auto.phase,'result');assert.ok(g.auto.match.finished);inBounds(g);click(g,'MAIN MENU');assert.equal(g.auto,null);
+ assert.equal(g.auto.phase,'result');assert.ok(g.auto.match.finished);assert.equal(g.tokens.length,0);g.key({key:'Escape'});assert.equal(g.auto,null);
 });
 test('cancelled asynchronous native match cannot overwrite a newer match',async()=>{
  const g=new Sunday(runtime());const first=g.startAuto(12345),old=g.auto;g.exitAuto();const second=g.startAuto(728),current=g.auto;await first;await second;
