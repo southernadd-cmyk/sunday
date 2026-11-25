@@ -33,12 +33,10 @@ export function makeRenderer(canvas){
  R(-2,-10,5,5,hair);if(!back)R(side&&dx<0?-3:0,-8,3,3,skin);else R(-2,-6,4,1,skin);
  }
  function render(match,dt=.016){let target=cameraTarget(match.ball);camera=camera?advanceCamera(camera,target,dt):target;g.drawImage(terrain,Math.round(camera.x),Math.round(camera.y),VIEW.w,VIEW.h,0,0,VIEW.w,VIEW.h);
- if(match.profile==='arcade')boards();
+ if(match.profile!=='original')boards();
  const actors=match.actors.filter(p=>p.visible!==false).map(p=>({...p,...project(p.x,p.z)})).sort((p,q)=>p.y-q.y);
  for(let p of actors){let last=prior.get(p.id),dx=last?p.x-last.x:0,dy=last?p.y-last.y:0,moving=Math.hypot(dx,dy)>.12,angle=moving?Math.atan2(dy,dx):last?.angle??(p.side===0?-Math.PI/2:Math.PI/2);prior.set(p.id,{x:p.x,y:p.y,angle});sprite(p,Math.round(p.x-camera.x),Math.round(p.y-camera.y),angle,moving,p.frame)}
  let b=project(match.ball.x,match.ball.z),bx=Math.round(b.x-camera.x),by=Math.round(b.y-camera.y),height=Math.round(Math.max(0,match.ball.y-.4)*2);rect(g,bx+1,by+2,4,2,'#3d5428');rect(g,bx-1,by-height-1,3,3,'#fff9de');rect(g,bx+1,by-height+1,1,1,'#343a2b');
- // HUD stays in screen coordinates, independent of scrolling.
- rect(g,4,4,102,17,'#243b25');g.fillStyle='#f5edbd';g.font='bold 11px monospace';g.fillText('SUN '+match.score[0]+' : '+match.score[1]+' OPP',9,16);rect(g,VIEW.w-54,4,50,17,'#243b25');g.fillText(String(Math.floor(match.time/60)).padStart(2,'0')+':'+String(Math.floor(match.time%60)).padStart(2,'0'),VIEW.w-48,16);
  }
  return {render,reset(){camera=null;prior.clear()}};
 }
