@@ -24,7 +24,14 @@ for(const file of ['kernel/providers/simulator/simulator.js','kernel/core/entiti
 const playerPath='kernel/core/entities/player.js';
 const playerOriginal=git('show','HEAD:'+playerPath);
 if(!playerOriginal.includes('if (ball.offsideReceiver) {'))throw Error('Upstream offside claim changed');
-writeFileSync(resolve(upstream,playerPath),playerOriginal.replace('if (ball.offsideReceiver) {','if (!Settings.SUNDAY_NO_OFFSIDE && ball.offsideReceiver) {')+'\n');
+let playerText=playerOriginal.replace('if (ball.offsideReceiver) {','if (!Settings.SUNDAY_NO_OFFSIDE && ball.offsideReceiver) {');
+playerText=playerText.replace('function getPassReceiverPosition(teammate, carrier, level) {', `function getPassReceiverPosition(teammate, carrier, level) {
+    if (Settings.SUNDAY_ATTACK) {
+        const target = teammate.getIdleMoveTarget();
+        // Aim at the actual run, not the unrelated eleven-a-side support grid.
+        return {x: teammate.x * .75 + target.x * .25, y: teammate.y * .75 + target.y * .25};
+    }`);
+writeFileSync(resolve(upstream,playerPath),playerText+'\n');
 // Opt-in compact-pitch decision changes; original profiles retain exact upstream logic.
 const teamFile='kernel/core/entities/team.js';
 let teamText=readFileSync(resolve(upstream,teamFile),'utf8');
@@ -35,13 +42,16 @@ teamText=patch(teamText,'if (bestLongScore > longBar) return bestLong;', 'if (Se
 teamText=patch(teamText,'let score = scorePassTarget(passer, teammate, aimDist, open);', `let score = scorePassTarget(passer, teammate, aimDist, open);
             if (Settings.SUNDAY_ATTACK) {
                 const field = Utils.getFieldBounds();
-                const forward = (oppGoalX > passer.x ? 1 : -1);
+                const forward = (oppGoalX > field.centerX ? 1 : -1);
                 const gain = (aim.x - passer.x) * forward / field.width;
                 const central = 1 - Math.min(1, Math.abs(aim.y - field.centerY) / (field.height * 0.5));
                 const nearGoal = 1 - Math.abs(aim.x - oppGoalX) / field.width;
-                score += Math.max(0, gain) * 12 + (nearGoal > .66 ? central * 3 : 0);
-                if (open && nearGoal > .66) score += 2;
+                score += Math.max(0, gain) * 14 + (nearGoal > .55 ? central * 6 : 0);
+                if (open && nearGoal > .55) score += 4;
             }`);
+teamText=patch(teamText,'const aimDetail = getBestPassToReceiver(from, teammate, passer, opponents, {', 'const aimDetail = getBestPassToReceiver(from, teammate, passer, opponents, { preferFeet: !!Settings.SUNDAY_ATTACK,');
+teamText=patch(teamText,'if (score < 5) continue;', 'if (score < (Settings.SUNDAY_ATTACK ? 1 : 5)) continue;');
+teamText=patch(teamText,'if (passType === \'short\' && score > bestShortScore)', 'if (passType === \'short\' && score > bestShortScore)');
 writeFileSync(resolve(upstream,teamFile),teamText);
 const outfieldFile='kernel/core/entities/player_states_outfield.js';
 let outfield=git('show','HEAD:'+outfieldFile);
@@ -57,6 +67,24 @@ writeFileSync(resolve(upstream,simFile),simText);
 outfield=patch(outfield,'const target = p.supportTarget || p.getIdleMoveTarget();','const target = Settings.SUNDAY_SHAPE ? p.getIdleMoveTarget() : (p.supportTarget || p.getIdleMoveTarget());');
 outfield=patch(outfield,'if (!ball || p.receiveTimer <= 0) {','if (!ball || p.receiveTimer <= 0 || (Settings.SUNDAY_SHAPE && ball.owner && ball.owner !== p)) {');
 outfield=patch(outfield,'if (distToGoal < getShootRange(p)) {','if (distToGoal < getShootRange(p) && (!Settings.SUNDAY_ATTACK || Math.abs(p.y - field.centerY) < field.height * .38 || distToGoal < field.width * .12)) {');
+writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
+// Prefer a real safe final ball if a teammate has a better shooting position.
+// Use the existing pass state: no forced completion or scripted goal.
+outfield=patch(outfield,'if (distToGoal < getShootRange(p)', `if (Settings.SUNDAY_ATTACK && distToGoal < field.width * .58 && p.passLinkCooldown <= 0) {
+                    const option = p.findBestPassTarget();
+                    if (option && option.type === 'short' && option.teammate) {
+                        const t = option.teammate;
+                        const gain = distToGoal - Math.abs(t.x - targetGoalX);
+                        const central = Math.abs(t.y - field.centerY) < field.height * .27;
+                        if (central && gain > field.width * .055 && Math.abs(t.x - targetGoalX) < field.width * .33) {
+                            p.passTarget = t; p.passType = option.type; p.passAim = option.aim || null;
+                            p.fsm.changeState(PlayerStates.Pass); return;
+                        }
+                    }
+                }
+                if (distToGoal < getShootRange(p)`);
+outfield=patch(outfield,'const tryShoot = willingness >= 1 || Math.random() < willingness;', 'const tryShoot = (Settings.SUNDAY_ATTACK && p.passLinkCooldown > 0 && p.lastPassFrom && distToGoal < field.width * .30) || willingness >= 1 || Math.random() < willingness;');
+outfield=patch(outfield,'const passChance = computeDribblePassChance(p, threat);','const passChance = Settings.SUNDAY_ATTACK ? Math.max(computeDribblePassChance(p, threat), threat.threatened ? .58 : .24) : computeDribblePassChance(p, threat);');
 writeFileSync(resolve(upstream,outfieldFile),outfield+'\n');
 const adapter=resolve(upstream,'sunday-adapter.js');
 copyFileSync(resolve(root,'scripts/engine-evaluation/soccer-adapter.js'),adapter);
