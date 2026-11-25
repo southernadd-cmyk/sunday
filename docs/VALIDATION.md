@@ -1,30 +1,21 @@
-# Prototype validation · 24 November 2026
+# Pitch prototype checks · 25 November 2026
 
-## Rules and build
+The card prototype's old validation is superseded by the spatial rules in version 0.2.
 
-- 23 behavioural tests passed with Node's built-in test runner.
-- The production Vite build passed. Application code and Three.js are split into separate cacheable bundles; font requests are limited to self-hosted Latin subsets.
-- 1,500 deterministic policy runs completed without a stalled phase. 367 won the cup (24.5%). The policy has no knowledge of future draws or shot rolls.
+## Automated
 
-## Browser playtest
+22 behavioural checks cover frozen previews, locked defender intentions, route length and boundaries, simultaneous movement, limited sprints, tackles along a route, bending around a defender, off-ball one-twos, passing interceptions, clear goals, keeper saves, chip height, running out of turns, exact rewind restoration, gear collection, four-fixture completion, loss and banking, profile migration, denied storage and preview/playback agreement.
 
-A complete four-fixture run was played through the rendered UI with normal card inputs and probability rolls:
+A twelve-seed search-policy smoke test completed all twelve runs. Its shortest attacks used two turns and its longest used three after upgrades. It explores future positions and is intended to catch impossible layouts and rule regressions, not to predict human success or enjoyment.
 
-| Fixture | Result |
-| --- | --- |
-| The Railway Arms | 3–2 |
-| AFC Municipal | 4–3 |
-| Station Road Social | 4–3 |
-| The Dog & Duck | 6–4 |
+## Browser checks
 
-The run drafted three rewards, took an early night and the boot bonus, removed Dodgy knee, and reached the champion screen. The 17 goals and four wins banked £145. A £35 training upgrade deducted correctly, and reloading preserved the £110 balance and one cup. The rules tests separately cover losing and drawing, single-claim banking, unaffordable actions and an exhausted hand.
+The full-screen pitch, click-to-plan route, keyboard planning, simultaneous playback, and a one-two were inspected through the browser. The desktop preview fills the viewport with the field and small edge overlays; the card table and former full-page menus are removed.
 
-Desktop was inspected at 1363×936. The same app was inspected in 390×844 and 360×740 viewport fixtures: score, meters and finishing controls fit; the card hand scrolls horizontally rather than widening the page. Text was enlarged after the first mobile inspection. The final hand was rechecked at both sizes.
+A browser sequence completed a one-two, sprint and left-corner goal; chose a boots pickup on the grass; advanced to the second fixture; deliberately played a marked unsafe route; and verified that rewind restored all three legs and the original frozen positions. Mobile fixtures at 390×844 and 360×740 fit the pitch and controls without a card table or page scrolling, and a pointer tap plotted a route in the narrow view. The `/tests/viewport.html` development fixture exposes those narrow-screen versions of the same app.
 
-## Rendering limit
+## Limits
 
-The remote browser reports WebGL as disabled. The browser playtest therefore exercised the compatibility renderer, which projects the same Three.js scene, camera and original sprite atlas. The WebGL renderer is included in the successful production build, but its shader compilation, actual GPU draw-call count and hardware frame pacing still need checking on a WebGL2-capable device.
+This is a first playable of a different mechanic. Human difficulty, football feel, physical Android touch input and sustained GPU performance still need playtesting. The browser compatibility renderer is available for environments with WebGL disabled. Source and build verification alone do not establish GPU shader compilation or hardware frame pacing.
 
-The intended WebGL budget is 12 scene draw calls, with a 640-pixel-wide framebuffer at 30 fps (384 pixels and 20 fps in LO-FI), no device-pixel-ratio scaling, lighting, dynamic shadows or post-processing. This budget is based on the scene structure, not a measured GPU result. `window.sundayPerformance()` reports actual metrics in the browser console.
-
-Human difficulty, longer-term variety and physical Android touch input still need playtesting. This is a complete first playable loop rather than a balanced finished game.
+Only club progress is saved; an active run is lost on refresh. The opponent AI is intentionally deterministic and readable. It does not simulate a full team or a ninety-minute match.

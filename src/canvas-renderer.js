@@ -95,9 +95,10 @@ export class CanvasPitchRenderer {
     if (ring) {
       this.project(0,0,0,ring.matrixWorld,camera,this.v);
       this.ctx.strokeStyle = '#fff16a'; this.ctx.lineWidth = 1;
-      this.ctx.beginPath(); this.ctx.ellipse(this.v.x,this.v.y,2.3*this.domElement.height/107,1.8*this.domElement.height/107,0,0,Math.PI*2); this.ctx.stroke();
+      this.ctx.beginPath(); this.ctx.ellipse(this.v.x,this.v.y,2.3*this.domElement.height/(camera.top-camera.bottom),2.1*this.domElement.height/(camera.top-camera.bottom),0,0,Math.PI*2); this.ctx.stroke();
     }
     if (actors) this.sprites(this.ctx,actors,camera);
+    for(const group of children) if(group.isGroup && group.visible) for(const child of group.children) if(child.visible) this.plane(this.ctx,child,child.matrixWorld,camera);
     for (const o of children) if (o.geometry?.type === 'PlaneGeometry' && !o.isInstancedMesh && o.material.transparent && o.geometry.parameters.width < 5) this.plane(this.ctx,o,o.matrixWorld,camera);
   }
   dispose() {}

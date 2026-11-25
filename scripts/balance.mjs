@@ -1,47 +1,51 @@
-// A repeatable sanity check, not a prediction of human win rates.
-// This policy cannot see the next draw or the shot roll.
-import { Run, CARDS } from '../src/engine.js';
-
-export function chooseAction(run) {
-  const legal = run.hand.filter(e => run.canPlay(e.uid));
-  const free = legal.find(e => e.id === 'breathe') || legal.find(e => ['tea','second'].includes(e.id) && run.energy < 6 && !run.preview(e.id).tackle);
-  if (free) return { uid: free.uid };
-  const shots = legal.filter(e => CARDS[e.id].shot).sort((a,b) => run.shotChance(b.id) - run.shotChance(a.id));
-  const shot = shots[0];
-  if (shot && run.shotChance(shot.id) >= 85) return { uid: shot.uid };
-  const reserve = shot ? CARDS[shot.id].cost : 1;
-  const setups = legal.filter(e => !CARDS[e.id].shot && !run.preview(e.id).tackle && run.energy - CARDS[e.id].cost >= reserve)
-    .sort((a,b) => ((CARDS[b.id].quality || 0) + (CARDS[b.id].draw || 0) * 8) - ((CARDS[a.id].quality || 0) + (CARDS[a.id].draw || 0) * 8));
-  if (setups.length) return { uid: setups[0].uid };
-  if (shot) return { uid: shot.uid };
-  return { action: run.energy ? 'scramble' : 'abandon' };
+// A small search policy for smoke-testing spatial layouts. It cannot alter a
+// shot outcome: the plan is played through the ordinary deterministic rules.
+import { Run, GOAL, distance } from '../src/engine.js';
+const fork=r=>Object.assign(Object.create(Run.prototype),r,{before:null,lastResult:null});
+export function candidates(r){
+ const p=r.state.actors[0],actions=[-5.8,5.8].map(x=>({kind:'shot',target:{x,z:GOAL.z}}));
+ if(r.buffs.chip)actions.push(...[-5.8,5.8].map(x=>({kind:'shot',target:{x,z:GOAL.z},chip:true})));
+ const kinds=[{kind:'run',burst:false}];
+ if(r.state.bursts)kinds.push({kind:'run',burst:true});
+ if(r.state.passes)for(const ally of [1,2,3])if(distance(p,r.state.actors[ally])<=29)kinds.push({kind:'one-two',ally,burst:false});
+ for(const mode of kinds){
+  const range=r.runRange+(mode.burst?7:0)+(mode.kind==='one-two'?2:0);
+  for(let a=0;a<8;a++){const angle=a/8*Math.PI*2;actions.push({...mode,path:[{x:p.x+Math.sin(angle)*range,z:p.z+Math.cos(angle)*range}]});}
+ }
+ return actions;
 }
-
-export function simulate(count = 1500) {
-  const reached = [0,0,0,0], wins = [0,0,0,0];
-  let goals = 0, chanceSum = 0, shots = 0, seedWithCup;
-  for (let seed = 1; seed <= count; seed++) {
-    const r = new Run(seed);
-    let guard = 0;
-    while (!['champion','lost'].includes(r.phase)) {
-      if (guard++ > 1500) throw new Error(`Run ${seed} failed to terminate`);
-      if (r.phase === 'ready') { reached[r.fixtureIndex]++; r.startMatch(); }
-      else if (r.phase === 'reward') {
-        wins[r.fixtureIndex]++;
-        const pref = ['second','feint','wall','chip','overlap','volley','laces','nutmeg'];
-        r.pickReward(pref.find(id => r.offers.includes(id)));
-      } else if (r.phase === 'event') r.chooseEvent(0);
-      else if (r.phase === 'resolution') r.nextChance();
-      else {
-        const action = chooseAction(r);
-        const result = action.uid ? r.play(action.uid) : r[action.action]();
-        if (result.chance) { chanceSum += result.chance; shots++; }
-      }
-    }
-    if (r.phase === 'champion') { wins[3]++; seedWithCup ||= seed; }
-    goals += r.totalGoals;
+export function solveAttack(r,beam=12){
+ let nodes=[{r:fork(r),path:[]}];
+ for(let depth=0;depth<r.state.beats;depth++){
+  const next=[];
+  for(const node of nodes)for(const action of candidates(node.r)){
+   const clean=node.r.normalise(action);if(clean.error)continue;
+   const result=node.r.simulate(clean,false),path=[...node.path,action];
+   if(result.type==='goal')return path;
+   if(result.type!=='move')continue;
+   const child=fork(node.r);child.state=result.end;child.intents=child.makeIntents();
+   const p=child.state.actors[0];
+   const room=Math.min(...child.state.actors.filter(a=>a.active).map(a=>distance(p,a)));
+   next.push({r:child,path,score:distance(p,{x:0,z:GOAL.z})+Math.max(0,6-room)*2-child.state.passes*.6-child.state.bursts*.5});
   }
-  return { runs: count, reached, wins, fixtureWinRates: wins.map((n,i) => +(n / reached[i] * 100).toFixed(1)), cupRate: +(wins[3] / count * 100).toFixed(1), averageGoals: +(goals / count).toFixed(2), averageShotChance: +(chanceSum / shots).toFixed(1), firstWinningSeed: seedWithCup };
+  const seen=new Set();nodes=next.sort((a,b)=>a.score-b.score).filter(n=>{const p=n.r.state.actors[0],key=[Math.round(p.x),Math.round(p.z),n.r.state.passes,n.r.state.bursts].join(',');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,beam);
+  if(!nodes.length)break;
+ }
+ return null;
 }
-
-if (process.argv[1]?.endsWith('balance.mjs')) console.log(JSON.stringify(simulate(Number(process.argv[2]) || 1500), null, 2));
+export function simulate(count=12){
+ let wins=0;const lengths=[];
+ for(let seed=1;seed<=count;seed++){
+  const r=new Run(seed);r.start();let guard=0;
+  while(!['champion','over'].includes(r.phase)&&guard++<30){
+   if(r.phase==='planning'){
+    const plan=solveAttack(r);if(!plan)break;
+    lengths.push(plan.length);for(const action of plan)r.commit(action);
+   }else if(['goal','setback'].includes(r.phase))r.continue();
+   else if(r.phase==='pickup')r.collect(r.offers.find(id=>['boots','touch','wind','range'].includes(id))||r.offers[0]);
+  }
+  if(r.phase==='champion')wins++;
+ }
+ return {runs:count,completed:wins,shortestAttack:Math.min(...lengths),longestAttack:Math.max(...lengths),averageTurns:+(lengths.reduce((a,b)=>a+b,0)/lengths.length).toFixed(2)};
+}
+if(process.argv[1]?.endsWith('balance.mjs'))console.log(JSON.stringify(simulate(Number(process.argv[2])||12),null,2));

@@ -1,153 +1,129 @@
-import { test } from 'node:test';
+import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import { Run, CARDS, STARTER, REWARDS, FIXTURES, defaultProfile, readProfile, saveProfile, purchase, MAX_HAND } from '../src/engine.js';
+import {Run,ACTORS,STRIDE,GOAL,route,routeLength,along,distance,clone,defaultProfile,readProfile,saveProfile,purchase} from '../src/engine.js';
+import {solveAttack} from '../scripts/balance.mjs';
+const start=(seed=1)=>{const r=new Run(seed);r.start();return r;};
+function openPitch(r,player={x:0,z:-28}){
+ Object.assign(r.state.actors[0],player);r.state.ball={x:player.x+.5,z:player.z-1,y:.6};
+ for(const a of r.state.actors)if(a.active)a.active=false;
+ Object.assign(r.state.actors[14],{x:24,z:-45});
+ r.intents=r.state.actors.map(a=>({x:a.x,z:a.z,id:a.id}));
+}
+function obstacle(r,index,p){Object.assign(r.state.actors[index],{...p,active:true});r.intents[index]={...p,id:index};}
 
-function hand(run, ids) { run.hand = ids.map((id, i) => ({ id, uid: 1000 + i })); return run.hand; }
-function start(seed = 42) { const r = new Run(seed); r.startMatch(); return r; }
-const deckCount = r => r.drawPile.length + r.hand.length + r.discard.length;
-
-test('a fresh match has all starter cards and a five-card hand', () => {
-  const r = start();
-  assert.equal(r.hand.length, 5); assert.equal(deckCount(r), STARTER.length);
-  assert.equal(r.energy, 3); assert.equal(r.attack, 1); assert.equal(r.goals, 0);
+test('a match starts frozen with twenty actors and finite resources',()=>{
+ const r=start();assert.equal(r.phase,'planning');assert.equal(r.state.actors.length,ACTORS);assert.equal(r.state.beats,6);assert.equal(r.state.bursts,1);assert.equal(r.state.passes,1);assert.equal(r.lives,3);
 });
-test('same seed and same actions produce the same hands and results', () => {
-  const a = start(123), b = start(123);
-  assert.deepEqual(a.hand, b.hand);
-  assert.deepEqual(a.scramble(), b.scramble());
-  a.nextChance(); b.nextChance(); assert.deepEqual(a.hand, b.hand);
+test('routes stay on the pitch and cannot exceed the travel budget',()=>{
+ const p=route({x:0,z:0},[{x:5,z:0},{x:5,z:-100},{x:100,z:0}],11);
+ assert.ok(Math.abs(routeLength(p)-11)<1e-8);assert.deepEqual(along(p,100),p.at(-1));assert.deepEqual(p[1],{x:5,z:0});
+ assert.deepEqual(route({x:0,z:0},[{x:NaN,z:2},{x:0,z:0}],11),[{x:0,z:0}]);
 });
-test('illegal cards and unaffordable cards leave state unchanged', () => {
-  const r = start(); hand(r, ['laces']); r.energy = 1;
-  const before = JSON.stringify(r);
-  assert.equal(r.play(1000), null); assert.equal(r.play(99), null);
-  assert.equal(JSON.stringify(r), before);
+test('previewing plans never advances the clock, actors, resources or random seed',()=>{
+ const r=start(),before=JSON.stringify(r);
+ for(let i=0;i<10;i++)r.preview({kind:'run',path:[{x:-20+i,z:-12}]});
+ assert.equal(JSON.stringify(r),before);
 });
-test('build-up spends legs, improves chance and includes the fixture pressure tax', () => {
-  const r = start(); hand(r, ['touch']);
-  const p = r.preview('touch'); const result = r.play(1000);
-  assert.equal(result.type, 'setup'); assert.equal(r.energy, 2);
-  assert.equal(r.quality, 32); assert.equal(r.pressure, 28); assert.equal(p.pressure, r.pressure);
+test('defender intentions are locked before an order is chosen',()=>{
+ const r=start(),intents=clone(r.intents);
+ r.preview({kind:'run',path:[{x:-25,z:-5}]});r.preview({kind:'run',path:[{x:25,z:-5}]});assert.deepEqual(r.intents,intents);
 });
-test('exactly 100 pressure loses the attack without allowing a shot', () => {
-  const r = start(); hand(r, ['run']); r.pressure = 78;
-  assert.equal(r.preview('run').tackle, true);
-  assert.equal(r.play(1000).type, 'tackle');
-  assert.equal(r.phase, 'resolution'); assert.equal(r.scramble(), null);
+test('invalid orders cannot spend a turn or consume a sprint',()=>{
+ const r=start(),before=JSON.stringify(r);
+ assert.equal(r.commit({kind:'teleport'}).type,'invalid');assert.equal(r.commit({kind:'run',path:[]}).type,'invalid');
+ assert.equal(r.commit({kind:'shot',target:{x:NaN}}).type,'invalid');assert.equal(r.commit({kind:'one-two',ally:14,path:[{x:0,z:-5}]}).type,'invalid');
+ assert.equal(JSON.stringify(r),before);
 });
-test('composure reduces pressure without charging a positive fixture tax', () => {
-  const r = start(); hand(r, ['breathe']); r.pressure = 10;
-  r.play(1000); assert.equal(r.pressure, 0); assert.equal(r.energy, 3);
+test('a normal move advances all players together and spends exactly one turn',()=>{
+ const r=start();openPitch(r,{x:0,z:0});r.intents[1]={x:-20,z:-25,id:1};
+ const result=r.commit({kind:'run',path:[{x:0,z:-11}]});
+ assert.equal(result.type,'move');assert.equal(r.state.actors[0].z,-11);assert.equal(r.state.actors[1].z,-25);assert.equal(r.state.beats,5);assert.equal(r.state.bursts,1);
+ assert.equal(result.frames.length,61*STRIDE);assert.equal(result.count,61);
+ assert.ok(Math.abs(result.frames[(result.count-1)*STRIDE+1]-r.state.actors[0].z)<1e-5);
 });
-test('a draw card never redraws itself during its own effect', () => {
-  const r = start(); hand(r, ['breathe']); r.drawPile = []; r.discard = [];
-  r.play(1000); assert.equal(r.hand.length, 0); assert.deepEqual(r.discard, ['breathe']);
+test('a sprint has a longer route and is exhausted after one use',()=>{
+ const r=start();openPitch(r,{x:0,z:0});const action={kind:'run',burst:true,path:[{x:30,z:0}]};
+ assert.equal(r.preview(action).order.path.at(-1).x,18);r.commit(action);assert.equal(r.state.bursts,0);
+ assert.equal(r.preview(action).valid,false);assert.equal(r.state.beats,5);
 });
-test('the hand cap never deletes undrawn cards', () => {
-  const r = start(); r.draw(20);
-  assert.equal(r.hand.length, MAX_HAND); assert.equal(deckCount(r), STARTER.length);
+test('spatial contact causes a tackle even if the destination is otherwise clear',()=>{
+ const r=start();openPitch(r,{x:0,z:0});obstacle(r,7,{x:0,z:-5});
+ const action={kind:'run',path:[{x:0,z:-11}]},p=r.preview(action),result=r.commit(action);
+ assert.equal(p.type,'tackle');assert.equal(result.type,p.type);assert.equal(result.hit,7);assert.equal(r.lives,2);assert.equal(r.phase,'setback');assert.ok(result.count<61);
 });
-test('discard reshuffles without losing or duplicating cards across attacks', () => {
-  const r = start();
-  for (let i = 0; i < FIXTURES[0].attacks; i++) {
-    r.scramble(); assert.equal(deckCount(r), STARTER.length);
-    r.nextChance(); assert.equal(deckCount(r), STARTER.length);
-  }
+test('a bent route can go around a defender instead of passing through him',()=>{
+ const r=start();openPitch(r,{x:0,z:0});obstacle(r,7,{x:0,z:-5});
+ const result=r.commit({kind:'run',path:[{x:-4,z:-2},{x:-4,z:-7},{x:0,z:-9}]});
+ assert.equal(result.type,'move');assert.ok(r.state.actors[0].x<0);
 });
-test('card effects and bonus conditions produce exact displayed shot probabilities', () => {
-  const r = start(); r.quality = 40;
-  assert.equal(r.shotChance('finish'), 48);
-  assert.equal(r.shotChance('toe'), 32);
-  assert.equal(r.shotChance(), 26);
-  assert.equal(r.shotChance('chip'), 71);
-  r.pressure = 40; assert.equal(r.shotChance('chip'), 56);
-  r.lastType = 'Link-up'; assert.equal(r.shotChance('volley'), 72);
-  r.lastType = 'Movement'; assert.equal(r.shotChance('volley'), 50);
-  r.quality = 95; assert.equal(r.shotChance('laces'), 95);
-  r.quality = 5; assert.equal(r.shotChance('toe'), 5);
+test('a one-two lets the player pass a defender while the ball is away',()=>{
+ const r=start();openPitch(r,{x:0,z:0});Object.assign(r.state.actors[1],{x:-10,z:-6});r.intents[1]={x:-10,z:-6,id:1};obstacle(r,7,{x:0,z:-5});
+ const result=r.commit({kind:'one-two',ally:1,path:[{x:0,z:-10}]});
+ assert.equal(result.type,'move');assert.equal(r.state.passes,0);assert.equal(r.state.actors[0].z,-10);
 });
-test('a scored shot counts once, banks £5 and blocks repeated inputs', () => {
-  const r = start(); hand(r, ['finish']); r.random = () => 0;
-  const result = r.play(1000);
-  assert.equal(result.type, 'goal'); assert.equal(result.chance, 26);
-  assert.equal(r.goals, 1); assert.equal(r.totalGoals, 1); assert.equal(r.bank, 5);
-  assert.equal(r.play(1000), null); assert.equal(r.shoot(), null); assert.equal(r.abandon(), null);
-  assert.equal(r.goals, 1);
+test('a defender in the outward passing lane intercepts a one-two',()=>{
+ const r=start();openPitch(r,{x:0,z:0});Object.assign(r.state.actors[1],{x:-10,z:-6});r.intents[1]={x:-10,z:-6,id:1};obstacle(r,7,{x:-5,z:-3.5});
+ assert.equal(r.commit({kind:'one-two',ally:1,path:[{x:0,z:-10}]}).type,'intercept');assert.equal(r.lives,2);
 });
-test('a high-quality shot can still miss and a miss earns nothing', () => {
-  const r = start(); r.quality = 95; r.random = () => 0.999;
-  assert.equal(r.scramble().type, 'miss'); assert.equal(r.bank, 0);
+test('a clear shot scores from geometry with no random roll',()=>{
+ const r=start();openPitch(r);const rng=r.rng,p=r.preview({kind:'shot',target:{x:5.8}}),result=r.commit({kind:'shot',target:{x:5.8}});
+ assert.equal(p.type,'goal');assert.equal(result.type,'goal');assert.equal(r.rng,rng);assert.equal(r.phase,'goal');assert.equal(r.bank,20);assert.equal(r.goals,1);
+ assert.equal(r.commit({kind:'shot',target:{x:5.8}}).type,'invalid');assert.equal(r.goals,1);
 });
-test('zero-cost shots can rescue an exhausted hand; fallback cannot', () => {
-  const r = start(); hand(r, ['toe']); r.energy = 0;
-  assert.equal(r.scramble(), null); assert.equal(r.play(1000).type === 'goal' || r.lastResult.type === 'miss', true);
+test('the keeper saves a centre shot when his actual position intersects it',()=>{
+ const r=start();openPitch(r);Object.assign(r.state.actors[14],{x:0,z:-45});r.intents[14]={x:0,z:-45,id:14};
+ assert.equal(r.preview({kind:'shot',target:{x:0}}).type,'save');assert.equal(r.preview({kind:'shot',target:{x:5.8}}).type,'goal');
 });
-test('letting a chance go resets legs, quality and pressure on the next attack', () => {
-  const r = start(); r.energy = 0; r.pressure = 99; r.quality = 90;
-  r.abandon(); r.nextChance();
-  assert.equal(r.attack, 2); assert.equal(r.energy, 3); assert.equal(r.quality, 18); assert.equal(r.pressure, 12);
+test('a chip skips a midfield tackle but has to be learned first',()=>{
+ const r=start();openPitch(r,{x:0,z:-15});r.buffs.shotRange=20;obstacle(r,7,{x:0,z:-30});
+ assert.equal(r.preview({kind:'shot',target:{x:0},chip:true}).valid,false);
+ assert.equal(r.preview({kind:'shot',target:{x:0}}).type,'tackle');r.buffs.chip=1;
+ assert.equal(r.preview({kind:'shot',target:{x:0},chip:true}).type,'goal');
 });
-test('draws knock you out; a win offers three unique rare cards', () => {
-  const draw = start(); draw.goals = 2; draw.attack = 6; draw.abandon(); draw.nextChance(); assert.equal(draw.phase, 'lost');
-  const win = start(); win.goals = 3; win.attack = 6; win.abandon(); win.nextChance();
-  assert.equal(win.phase, 'reward'); assert.equal(new Set(win.offers).size, 3);
-  assert.ok(win.offers.every(id => REWARDS.includes(id))); assert.equal(win.bank, 15);
+test('the last non-scoring turn exhausts the chance without trapping the game',()=>{
+ const r=start();openPitch(r,{x:0,z:0});r.state.beats=1;
+ assert.equal(r.commit({kind:'run',path:[{x:2,z:0}]}).type,'whistle');assert.equal(r.phase,'setback');assert.equal(r.lives,2);
+ assert.equal(r.continue(),true);assert.equal(r.phase,'planning');assert.equal(r.state.beats,6);
 });
-test('rewards and events cannot be selected twice or out of phase', () => {
-  const r = start(); assert.equal(r.pickReward('laces'), false); assert.equal(r.chooseEvent(0), false);
-  r.goals = 3; r.attack = 6; r.abandon(); r.nextChance();
-  assert.equal(r.pickReward('not-a-card'), false);
-  const reward = r.offers[0]; assert.equal(r.pickReward(reward), true); assert.equal(r.deck.at(-1), reward);
-  assert.equal(r.pickReward(reward), false); assert.equal(r.chooseEvent(-1), false); assert.equal(r.chooseEvent(.5), false);
-  assert.equal(r.chooseEvent(0), true); assert.equal(r.chooseEvent(0), false);
-  assert.equal(r.fixtureIndex, 1); assert.equal(r.phase, 'ready');
-  r.startMatch(); assert.equal(r.energy, 4);
+test('rewind restores actual actors, legs, turn and consumables only once',()=>{
+ const r=start();openPitch(r,{x:0,z:0});obstacle(r,7,{x:0,z:-5});const state=clone(r.state),intent=clone(r.intents);
+ r.commit({kind:'run',burst:true,path:[{x:0,z:-18}]});assert.equal(r.lives,2);assert.equal(r.rewind(),true);
+ assert.deepEqual(r.state,state);assert.deepEqual(r.intents,intent);assert.equal(r.lives,3);assert.equal(r.rewinds,0);assert.equal(r.rewind(),false);
 });
-test('one-match event bonuses expire after that match', () => {
-  const r = start(); r.boon = { quality: 10, energy: 1 }; r.goals = 3; r.attack = 6; r.abandon(); r.nextChance();
-  assert.deepEqual(r.boon, {});
+test('rewards are unique, alter on-pitch rules and cannot be collected twice',()=>{
+ const r=start();openPitch(r);r.commit({kind:'shot',target:{x:5.8}});assert.equal(r.rewind(),false);r.continue();
+ assert.equal(r.phase,'pickup');assert.equal(new Set(r.offers).size,3);assert.equal(r.collect('unknown'),false);
+ r.offers=['boots','wind','kev'];assert.equal(r.collect('boots'),true);assert.equal(r.runRange,14);assert.equal(r.fixtureIndex,1);assert.equal(r.collect('boots'),false);
 });
-test('permanent upgrades apply to new runs, warm-up only to the first attack', () => {
-  const profile = { ...defaultProfile(), training: 2, warmup: 1 };
-  const r = new Run(1, profile); r.startMatch();
-  assert.equal(r.quality, 24); assert.equal(r.energy, 4);
-  r.abandon(); r.nextChance(); assert.equal(r.energy, 3); assert.equal(r.quality, 24);
+test('four fixtures can be completed through the normal physics and reward flow',()=>{
+ const r=start(3),p=defaultProfile();
+ for(let fixture=0;fixture<4;fixture++){
+  const plan=solveAttack(r);assert.ok(plan,`No route for fixture ${fixture}`);
+  for(const action of plan)r.commit(action);assert.equal(r.phase,'goal');r.continue();
+  if(fixture<3)r.collect(r.offers[0]);
+ }
+ assert.equal(r.phase,'champion');assert.equal(r.history.length,4);assert.equal(r.goals,4);assert.equal(r.bank,80);
+ assert.equal(r.claim(p),true);assert.equal(r.claim(p),false);assert.equal(p.kitty,80);assert.equal(p.cups,1);
 });
-test('an entire four-match run reaches champion and can bank once', () => {
-  const r = new Run(56); const profile = defaultProfile();
-  for (let fixture = 0; fixture < 4; fixture++) {
-    assert.equal(r.startMatch(), true);
-    while (r.phase === 'playing') {
-      r.quality = 95; r.random = () => 0; r.scramble(); r.nextChance();
-    }
-    if (fixture < 3) { assert.equal(r.phase, 'reward'); r.pickReward(r.offers[0]); r.chooseEvent(0); }
-  }
-  assert.equal(r.phase, 'champion'); assert.equal(r.wins, 4); assert.equal(r.history.length, 4);
-  assert.equal(r.claim(profile), true); assert.equal(r.claim(profile), false);
-  assert.equal(profile.cups, 1); assert.equal(profile.runs, 1); assert.equal(profile.kitty, r.bank);
+test('three lost chances end the run and still bank earlier goals once',()=>{
+ const r=start(),p=defaultProfile();r.bank=20;
+ for(let i=0;i<3;i++){openPitch(r,{x:0,z:0});obstacle(r,7,{x:0,z:-5});r.commit({kind:'run',path:[{x:0,z:-11}]});r.continue();}
+ assert.equal(r.phase,'over');assert.equal(r.lives,0);assert.equal(r.claim(p),true);assert.equal(p.kitty,20);assert.equal(r.rewind(),false);
 });
-test('failed runs bank their earned goals and cannot claim before ending', () => {
-  const r = start(); const profile = defaultProfile();
-  assert.equal(r.claim(profile), false); r.bank = 5; r.attack = 6; r.abandon(); r.nextChance();
-  assert.equal(r.claim(profile), true); assert.equal(profile.kitty, 5); assert.equal(profile.runs, 1); assert.equal(profile.cups, 0);
+test('profile migration preserves earned kitty and caps old upgrades safely',()=>{
+ const storage={getItem:key=>key==='sunday-profile'?'{"version":1,"kitty":145,"training":2,"warmup":1,"cups":1}':null};
+ const p=readProfile(storage);assert.equal(p.version,2);assert.equal(p.kitty,145);assert.equal(p.training,2);assert.equal(p.cups,1);
+ const r=new Run(1,p);r.start();assert.equal(r.runRange,12);assert.equal(r.state.bursts,2);
 });
-test('purchases respect prices, level caps and unknown upgrades', () => {
-  const p = { ...defaultProfile(), kitty: 100 };
-  assert.equal(purchase(p, 'training'), true); assert.equal(p.kitty, 65); assert.equal(p.training, 1);
-  assert.equal(purchase(p, 'warmup'), true); assert.equal(purchase(p, 'warmup'), false);
-  assert.equal(purchase(p, 'training'), false); assert.equal(purchase(p, 'anything'), false);
+test('corrupt or denied storage recovers and purchases respect limits',()=>{
+ assert.deepEqual(readProfile(null),defaultProfile());assert.deepEqual(readProfile({getItem:()=>'{broken'}),defaultProfile());assert.equal(saveProfile(null,defaultProfile()),false);
+ const p={...defaultProfile(),kitty:100};assert.equal(purchase(p,'training'),true);assert.equal(p.kitty,65);assert.equal(purchase(p,'warmup'),true);assert.equal(purchase(p,'warmup'),false);assert.equal(purchase(p,'training'),false);
 });
-test('storage corruption, unknown versions, denied storage and impossible upgrades recover', () => {
-  const storage = value => ({ getItem: () => value });
-  assert.deepEqual(readProfile(storage('{broken')), defaultProfile());
-  assert.deepEqual(readProfile(storage('{"version":999}')), defaultProfile());
-  assert.deepEqual(readProfile(null), defaultProfile());
-  assert.equal(saveProfile(null, defaultProfile()), false);
-  const p = readProfile(storage('{"version":1,"kitty":-9,"training":999,"warmup":-3,"runs":"banana"}'));
-  assert.equal(p.kitty, 0); assert.equal(p.training, 3); assert.equal(p.warmup, 0); assert.equal(p.runs, 0);
-});
-test('all starter and reward cards have a playable definition', () => {
-  for (const id of [...STARTER, ...REWARDS]) {
-    assert.ok(CARDS[id]); assert.ok(Number.isInteger(CARDS[id].cost)); assert.ok(CARDS[id].cost >= 0);
-  }
+test('repeated previews and playback agree across a sweep of spatial plans',()=>{
+ const base=start(8);
+ for(let i=0;i<18;i++){
+  const r=Object.assign(Object.create(Run.prototype),clone(base)),a=i*Math.PI/9;
+  const order={kind:'run',burst:i%2===0,path:[{x:r.state.actors[0].x+Math.sin(a)*18,z:r.state.actors[0].z+Math.cos(a)*18}]};
+  const p=r.preview(order),result=r.commit(order);assert.equal(p.type,result.type);assert.ok(distance(p.end,result.end.actors[0])<1e-7);
+ }
 });

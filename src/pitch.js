@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CanvasPitchRenderer } from './canvas-renderer.js';
+import { ACTORS, STRIDE, GEAR } from './engine.js';
 
 // A small, fixed-resolution Three.js scene: instanced pixel sprites, one atlas,
 // unlit geometry, no shadows, no post-processing, and no per-frame allocations.
@@ -103,17 +104,22 @@ export class Pitch {
     host.append(this.renderer.domElement);
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-60, 60, 45, -45, 1, 200);
-    this.camera.position.set(0, 108, 42);
-    this.camera.lookAt(0, 0, -10);
+    this.camera.position.set(0, 140, 12);
+    this.camera.lookAt(0, 0, -18);
+    this.raycaster = new THREE.Raycaster();
+    this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    this.pointer = new THREE.Vector2();
+    this.worldPoint = new THREE.Vector3();
+    this.projectPoint = new THREE.Vector3();
     this.buildGround();
     this.buildPlayers();
     this.buildDetails();
+    this.tick = this.tick.bind(this);
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(host);
     this.onVisibility = () => { this.active = !document.hidden; if (this.active) { this.lastTime = performance.now(); this.schedule(); } };
     document.addEventListener('visibilitychange', this.onVisibility);
     this.resize();
-    this.tick = this.tick.bind(this);
     this.schedule();
   }
   buildGround() {
@@ -231,7 +237,7 @@ export class Pitch {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     if (!w || !h) return;
     const aspect = w / h;
-    const height = aspect < 1 ? 93 : 107;
+    const height = aspect < 1 ? Math.max(104, 44 / aspect) : Math.max(58, 94 / aspect);
     this.camera.left = -height * aspect / 2;
     this.camera.right = height * aspect / 2;
     this.camera.top = height / 2; this.camera.bottom = -height / 2;
@@ -242,93 +248,109 @@ export class Pitch {
     this.renderer.setSize(rw, Math.max(1, Math.round(rw / aspect)), false);
     this.renderer.domElement.style.width = '100%'; this.renderer.domElement.style.height = '100%';
     this.dirty = true;
+    this.schedule();
+    this.onFrame?.();
   }
   setLow(value) { this.low = value; this.resize(); }
-  setMode(mode) { this.mode = mode; this.dirty = true; }
   update(run) {
-    if (!run || !run.attack) return;
-    if (!['Composure', 'Graft', 'Baggage'].includes(run.lastType)) this.targetX = clamp(Math.sin(run.actions * 2.1 + run.attack) * 13, -20, 20);
-    this.targetZ = clamp(6 - (run.quality - 18) * 0.5, -32, 8);
-    this.pressure = run.pressure / 100;
-    if (run.attack !== this.lastAttack || run.fixtureIndex !== this.lastFixture) {
-      this.playerX = this.targetX; this.playerZ = this.targetZ;
-      this.lastAttack = run.attack; this.lastFixture = run.fixtureIndex;
-      this.anim = null;
-    }
+    this.game = run;
     this.dirty = true;
-  }
-  animate(result) {
-    if (!result) return;
-    if (result.type === 'setup') {
-      this.lastEvent = result.card;
-      if (['pass', 'wall', 'overlap'].includes(result.card)) this.passAnim = { elapsed: 0, duration: this.reducedMotion ? 0.1 : 0.65 };
-      this.dirty = true; return;
-    }
-    this.passAnim = null;
-    this.anim = { type: result.type, elapsed: 0, duration: this.reducedMotion ? 0.15 : 0.9, fromX: this.playerX, fromZ: this.playerZ, toX: result.type === 'goal' ? -4.2 : 10.5 };
-    this.dirty = true;
-  }
-  schedule() { if (!this.frame && this.active) this.frame = requestAnimationFrame(this.tick); }
-  tick(now) {
-    this.frame = null;
-    if (!this.active) return;
-    const elapsed = Math.min(0.1, (now - (this.lastTime || now)) / 1000);
-    this.lastTime = now;
-    this.time += elapsed;
-    // 30 fps is ample for tiny turn-based sprites, 20 on low detail.
-    if (now >= this.nextFrame) {
-      this.nextFrame = now + (this.low ? 50 : 1000 / 30);
-      const renderDelta = Math.min(0.15, (now - (this.lastRenderTime || now)) / 1000);
-      this.lastRenderTime = now;
-      this.render(renderDelta);
-    }
     this.schedule();
   }
-  render(dt) {
-    const motion = !this.reducedMotion;
-    this.playerX += (this.targetX - this.playerX) * Math.min(1, dt * 10);
-    this.playerZ += (this.targetZ - this.playerZ) * Math.min(1, dt * 10);
-    const walking = Math.abs(this.targetX - this.playerX) > 0.3 || Math.abs(this.targetZ - this.playerZ) > 0.3;
-    const t = this.time;
-    for (let i = 0; i < 20; i++) {
-      const p = this.positions[i];
-      let x = p[0], z = p[1];
-      if (i === 0) { x = this.playerX; z = this.playerZ; }
-      else if (i === 9 && this.mode === 'playing') {
-        const closing = (this.pressure || 0) * 0.75;
-        x += (this.playerX - x) * closing; z += (this.playerZ - z) * closing;
-      } else if (motion && i < 14) { x += Math.sin(t * 0.7 + i * 3.1) * 0.7; z += Math.cos(t * 0.5 + i * 1.7) * 0.6; }
-      if (i === 14 && this.anim && ['goal', 'miss'].includes(this.anim.type)) x = this.anim.toX * Math.min(1, this.anim.elapsed * 1.8) * (this.anim.type === 'goal' ? 0.5 : 0.9);
-      this.dummy.position.set(x, 1.8, z);
-      this.dummy.quaternion.copy(this.camera.quaternion); this.dummy.scale.set(1, 1, 1);
-      this.dummy.updateMatrix(); this.actors.setMatrixAt(i, this.dummy.matrix);
-      this.tiles[i * 2] = motion && (i !== 0 || walking) ? Math.floor(t * 4 + i) % 2 : 0;
-      this.tiles[i * 2 + 1] = 3 - p[2];
-    }
-    this.actors.instanceMatrix.needsUpdate = true;
-    this.actors.geometry.attributes.tile.needsUpdate = true;
-    this.ring.position.set(this.playerX, 0.12, this.playerZ);
-    if (this.anim) {
-      this.anim.elapsed += dt;
-      const f = Math.min(1, this.anim.elapsed / this.anim.duration);
-      const shoot = ['goal', 'miss'].includes(this.anim.type);
-      this.ballPos.set(shoot ? THREE.MathUtils.lerp(this.anim.fromX, this.anim.toX, f) : this.playerX + f * 4, shoot ? 0.8 + Math.sin(f * Math.PI) * 5 : 0.8, shoot ? THREE.MathUtils.lerp(this.anim.fromZ - 1.8, -50, f) : this.playerZ - 2);
-    } else if (this.passAnim) {
-      this.passAnim.elapsed += dt;
-      const f = Math.min(1, this.passAnim.elapsed / this.passAnim.duration);
-      const outAndBack = 1 - Math.abs(f * 2 - 1);
-      this.ballPos.set(THREE.MathUtils.lerp(this.playerX, -20, outAndBack), 0.8, THREE.MathUtils.lerp(this.playerZ - 1.8, -8, outAndBack));
-      if (f === 1) this.passAnim = null;
-    } else this.ballPos.set(this.playerX + 0.6, 0.8, this.playerZ - 1.8);
-    this.ball.position.copy(this.ballPos);
-    const attr = this.aim.geometry.attributes.position;
-    attr.setXYZ(0, this.playerX, 0.13, this.playerZ - 2); attr.needsUpdate = true;
-    this.aim.computeLineDistances();
-    this.aim.visible = this.mode === 'playing' && !this.anim;
-    this.renderer.render(this.scene, this.camera);
-    this.dirty = false;
+  screenPoint(x, z, y = 0) {
+    this.camera.updateMatrixWorld();
+    this.projectPoint.set(x, y, z).project(this.camera);
+    return { x: (this.projectPoint.x + 1) * this.host.clientWidth / 2, y: (1 - this.projectPoint.y) * this.host.clientHeight / 2 };
   }
-  metrics() { return { backend: this.backend, calls: this.renderer.info.render.calls, triangles: this.renderer.info.render.triangles, width: this.renderer.domElement.width, height: this.renderer.domElement.height, textures: this.renderer.info.memory.textures, geometries: this.renderer.info.memory.geometries }; }
+  groundPoint(clientX, clientY) {
+    const rect = this.host.getBoundingClientRect();
+    this.pointer.set((clientX-rect.left)/rect.width*2-1, -(clientY-rect.top)/rect.height*2+1);
+    this.camera.updateMatrixWorld();
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const point = this.raycaster.ray.intersectPlane(this.groundPlane, this.worldPoint);
+    return point ? { x:point.x,z:point.z } : null;
+  }
+  play(result) {
+    return new Promise(resolve => {
+      this.anim = { result, elapsed:0, duration:this.reducedMotion ? .12 : Math.max(.3,result.duration), resolve };
+      this.dirty = true;
+      this.lastRenderTime = performance.now();
+      this.schedule();
+    });
+  }
+  showPickups(offers = []) {
+    const key=offers.join(',');
+    if(this.pickupKey===key)return;
+    this.pickupKey=key;
+    if(!this.pickupGroup) {
+      this.pickupTextures=new Map();this.pickupGroup=new THREE.Group();
+      this.pickupGeometry=new THREE.PlaneGeometry(5.5,5.5);
+      for(let i=0;i<3;i++) {
+        const mat=new THREE.MeshBasicMaterial({transparent:true,depthWrite:false});
+        const mesh=new THREE.Mesh(this.pickupGeometry,mat);
+        mesh.position.set((i-1)*13,2,-22);mesh.quaternion.copy(this.camera.quaternion);this.pickupGroup.add(mesh);
+      }
+      this.scene.add(this.pickupGroup);
+    }
+    this.pickupGroup.visible=offers.length>0;
+    offers.forEach((id,i)=>{
+      const icon=GEAR[id].icon;
+      if(!this.pickupTextures.has(icon))this.pickupTextures.set(icon,canvasTexture(16,16,ctx=>{
+        const rect=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);};
+        if(icon==='orange'){rect(4,3,8,10,'#f7a63b');rect(3,5,10,6,'#f7a63b');rect(7,3,2,10,'#fff3b1');rect(3,7,10,2,'#fff3b1');rect(7,1,3,2,'#35633a');}
+        else if(icon==='shirt'){rect(4,3,8,10,'#e65340');rect(1,4,14,5,'#e65340');rect(6,2,4,3,'#f5efcf');rect(7,5,2,5,'#f5efcf');}
+        else if(icon==='ball'){rect(4,3,8,10,'#f5efcf');rect(3,5,10,6,'#f5efcf');rect(6,6,4,4,'#182640');rect(4,3,3,2,'#182640');rect(9,11,3,2,'#182640');}
+        else if(icon==='watch'){rect(6,0,4,16,'#bc9a61');rect(3,4,10,9,'#f5d65b');rect(5,5,6,6,'#f5efcf');rect(7,6,1,4,'#182640');rect(7,9,3,1,'#182640');}
+        else if(icon==='tape'){rect(3,4,10,8,'#f5e9be');rect(5,2,6,12,'#e8d9ae');rect(7,5,2,6,'#b69975');}
+        else{rect(3,4,5,8,'#fff09d');rect(3,10,11,4,'#fff09d');rect(4,5,3,6,'#e64b38');rect(4,11,8,2,'#e64b38');rect(4,14,2,2,'#182640');rect(11,14,2,2,'#182640');}
+      }));
+      const material=this.pickupGroup.children[i].material;
+      material.map=this.pickupTextures.get(icon);material.needsUpdate=true;
+    });
+    this.dirty=true;this.schedule();
+  }
+  schedule() { if (!this.frame && this.active) this.frame=requestAnimationFrame(this.tick); }
+  tick(now) {
+    this.frame=null;
+    if(!this.active)return;
+    if(now>=this.nextFrame) {
+      const dt=Math.min(.1,(now-(this.lastRenderTime||now))/1000);
+      this.lastRenderTime=now;this.nextFrame=now+(this.low?50:1000/30);
+      this.render(dt);
+    }
+    if(this.anim||this.dirty)this.schedule();
+  }
+  render(dt) {
+    if(!this.game?.state)return;
+    const state=this.game.state;
+    let frame=null, offset=0, nextOffset=0, mix=0;
+    if(this.anim) {
+      this.anim.elapsed+=dt;
+      const f=Math.min(1,this.anim.elapsed/this.anim.duration)*(this.anim.result.count-1);
+      offset=Math.floor(f)*STRIDE;nextOffset=Math.min(this.anim.result.count-1,Math.floor(f)+1)*STRIDE;
+      mix=f-Math.floor(f);frame=this.anim.result.frames;
+    }
+    for(let i=0;i<ACTORS;i++) {
+      const a=state.actors[i];
+      const x=frame?THREE.MathUtils.lerp(frame[offset+i*2],frame[nextOffset+i*2],mix):a.x;
+      const z=frame?THREE.MathUtils.lerp(frame[offset+i*2+1],frame[nextOffset+i*2+1],mix):a.z;
+      this.dummy.position.set(x,1.8,z);this.dummy.quaternion.copy(this.camera.quaternion);this.dummy.scale.set(1,1,1);
+      this.dummy.updateMatrix();this.actors.setMatrixAt(i,this.dummy.matrix);
+      this.tiles[i*2]=frame&&!this.reducedMotion?Math.floor(this.anim.elapsed*6+i)%2:0;
+      this.tiles[i*2+1]=3-a.team;
+      if(i===0)this.ring.position.set(x,.12,z);
+    }
+    this.actors.instanceMatrix.needsUpdate=true;this.actors.geometry.attributes.tile.needsUpdate=true;
+    const b=ACTORS*2;
+    this.ball.position.set(frame?THREE.MathUtils.lerp(frame[offset+b],frame[nextOffset+b],mix):state.ball.x,frame?THREE.MathUtils.lerp(frame[offset+b+2],frame[nextOffset+b+2],mix):state.ball.y,frame?THREE.MathUtils.lerp(frame[offset+b+1],frame[nextOffset+b+1],mix):state.ball.z);
+    this.aim.visible=false;
+    this.renderer.render(this.scene,this.camera);this.dirty=false;
+    this.onFrame?.();
+    if(this.anim && this.anim.elapsed>=this.anim.duration) {
+      const resolve=this.anim.resolve;this.anim=null;this.dirty=true;this.schedule();resolve();
+    }
+  }
+  metrics() { return { backend:this.backend,calls:this.renderer.info.render.calls,triangles:this.renderer.info.render.triangles,width:this.renderer.domElement.width,height:this.renderer.domElement.height }; }
   dispose() {
     this.active = false;
     cancelAnimationFrame(this.frame);
@@ -337,6 +359,6 @@ export class Pitch {
     const geometries = new Set(), materials = new Set(), textures = new Set();
     this.scene.traverse(obj => { if (obj.geometry) geometries.add(obj.geometry); if (obj.material) materials.add(obj.material); });
     materials.forEach(mat => { if (mat.map) textures.add(mat.map); if (mat.uniforms?.atlas) textures.add(mat.uniforms.atlas.value); mat.dispose(); });
-    geometries.forEach(g => g.dispose()); textures.forEach(t => t.dispose()); this.renderer.dispose();
+    geometries.forEach(g => g.dispose()); this.pickupTextures?.forEach(t=>textures.add(t)); textures.forEach(t => t.dispose()); this.renderer.dispose();
   }
 }

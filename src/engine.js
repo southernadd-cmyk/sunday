@@ -1,265 +1,198 @@
-// Pure turn-based rules. Rendering never decides a football outcome.
-export const SAVE_VERSION = 1;
-export const MAX_HAND = 8;
-export const FIXTURES = [
-  { name: 'The Railway Arms', short: 'RAILWAY', round: 'First round', ground: 'Recreation Ground', score: 2, attacks: 6, pressure: 12, tax: 2, weather: 'Overcast, obviously', rule: 'Two down already. Their centre-half has just finished a night shift. Time to rescue this.', colour: '#496cdb' },
-  { name: 'AFC Municipal', short: 'MUNICIPAL', round: 'Quarter-final', ground: 'Council Pitch No. 3', score: 3, attacks: 6, pressure: 20, tax: 4, weather: 'Sideways drizzle', rule: 'A heavy pitch and three goals behind. Every build-up card adds 4 extra pressure.', colour: '#eed253' },
-  { name: 'Station Road Social', short: 'STATION RD', round: 'Semi-final', ground: 'The Playing Fields', score: 3, attacks: 7, pressure: 26, tax: 6, weather: 'A proper headwind', rule: 'Three behind. Seven attacks, and very little breathing room. Use that new kit.', colour: '#bd70c2' },
-  { name: 'The Dog & Duck', short: 'DOG & DUCK', round: 'Cup final', ground: 'Saltmere Common', score: 4, attacks: 7, pressure: 32, tax: 8, weather: 'Cup-final sunshine', rule: 'The holders have put four past us. Seven attacks to produce a completely unreasonable comeback.', colour: '#f0f0e2' },
+// Football in two-second turns. Preview and playback use the same rules.
+export const BEAT=2, STEPS=60, ACTORS=20, STRIDE=43;
+export const GOAL={z:-47,left:-6.1,right:6.1};
+export const BOUNDS={left:-34,right:34,top:-44.5,bottom:36};
+export const FIXTURES=[
+ {name:'The Railway Arms',short:'RAILWAY',ground:'Recreation Ground',mood:'Their back line has just finished a night shift.',defenders:3,speed:6.5,keeper:4,beats:6},
+ {name:'AFC Municipal',short:'MUNICIPAL',ground:'Council Pitch No. 3',mood:'A tighter back four. Make them commit, then go around.',defenders:4,speed:7,keeper:4.5,beats:6},
+ {name:'Station Road Social',short:'STATION RD',ground:'The Playing Fields',mood:'They crowd the middle. Kev still has a bit of space.',defenders:5,speed:7.4,keeper:5,beats:6},
+ {name:'The Dog & Duck',short:'DOG & DUCK',ground:'Saltmere Common',mood:'The holders. One good run and you are a pub legend.',defenders:6,speed:7.8,keeper:5.5,beats:7},
 ];
-
-export const CARDS = {
-  touch: { name: 'First touch', type: 'Control', cost: 1, quality: 14, pressure: 14, icon: 'boot', text: '+14% chance. +14 pressure.', quote: 'For once, it stays under your foot.' },
-  run: { name: 'Lose your man', type: 'Movement', cost: 1, quality: 20, pressure: 20, icon: 'run', text: '+20% chance. +20 pressure.', quote: 'He turns like the number 12 bus.' },
-  pass: { name: 'Give & go', type: 'Link-up', cost: 1, quality: 10, pressure: 12, draw: 1, icon: 'pass', text: '+10% chance. Draw 1. +12 pressure.', quote: 'Give it to Kev. Actually get it back.' },
-  breathe: { name: 'Head up', type: 'Composure', cost: 0, pressure: -18, draw: 1, icon: 'eye', text: 'Lose 18 pressure. Draw 1.', quote: 'There is slightly more time than you think.' },
-  tea: { name: 'Half-time orange', type: 'Graft', cost: 0, energy: 1, pressure: 12, icon: 'orange', text: '+1 leg. +12 pressure.', quote: 'Mostly peel. Still counts.' },
-  finish: { name: 'Side-foot it', type: 'Shot', cost: 1, shot: true, bonus: 8, icon: 'ball', text: 'Shoot with +8% chance.', quote: 'Pick a corner. Try to mean it.' },
-  toe: { name: 'Toe punt', type: 'Shot', cost: 0, shot: true, bonus: -8, icon: 'ball', text: 'Shoot with −8% chance. Costs no legs.', quote: 'No technique. Absolutely no shame.' },
-  laces: { name: 'Put your laces through it', type: 'Shot', cost: 2, shot: true, bonus: 25, icon: 'fire', rare: true, text: 'Shoot with +25% chance.', quote: 'The keeper has a shift at two.' },
-  nutmeg: { name: 'Through his legs', type: 'Flair', cost: 1, quality: 32, pressure: 26, icon: 'nutmeg', rare: true, text: '+32% chance. +26 pressure.', quote: 'You will be talking about this all week.' },
-  overlap: { name: 'Kev on the overlap', type: 'Link-up', cost: 1, quality: 18, pressure: 8, draw: 2, icon: 'pass', rare: true, text: '+18% chance. Draw 2. +8 pressure.', quote: 'A full-back, briefly possessed by Cafu.' },
-  second: { name: 'Second wind', type: 'Graft', cost: 0, energy: 2, pressure: -12, icon: 'wind', rare: true, text: '+2 legs. Lose 12 pressure.', quote: 'That Thursday run has finally paid off.' },
-  feint: { name: 'Drop a shoulder', type: 'Flair', cost: 1, quality: 20, pressure: -12, icon: 'run', rare: true, text: '+20% chance. Lose 12 pressure.', quote: 'Sold him a dummy and a timeshare.' },
-  chip: { name: 'Cheeky little dink', type: 'Shot', cost: 1, shot: true, bonus: 16, calmBonus: 15, icon: 'chip', rare: true, text: 'Shoot +16%. Another +15% below 40 pressure.', quote: 'If this comes off, you are unbearable.' },
-  wall: { name: 'Use the big lad', type: 'Link-up', cost: 1, quality: 24, pressure: 4, icon: 'pass', rare: true, text: '+24% chance. +4 pressure.', quote: 'Darren has held off two men and a mortgage.' },
-  volley: { name: 'On the volley', type: 'Shot', cost: 1, shot: true, bonus: 10, linkBonus: 22, icon: 'fire', rare: true, text: 'Shoot +10%. Another +22% after a Link-up card.', quote: 'Do not let it bounce. Do not think.' },
-  badknee: { name: 'Dodgy knee', type: 'Baggage', cost: 1, pressure: -5, icon: 'knee', curse: true, text: 'Lose 5 pressure. Takes up a place in your hand.', quote: 'It can tell you when rain is coming.' },
+export const GEAR={
+ boots:{name:'Borrowed boots',short:'BOOTS',icon:'boots',text:'Run 3 metres further each turn.',effect:'range',amount:3},
+ wind:{name:'Second wind',short:'SECOND WIND',icon:'orange',text:'One extra sprint in every attack.',effect:'bursts',amount:1},
+ kev:{name:'Kev gets it',short:'KEV GETS IT',icon:'shirt',text:'One extra one-two in every attack.',effect:'passes',amount:1},
+ touch:{name:'Close control',short:'CLOSE CONTROL',icon:'ball',text:'Defenders must get 0.55m closer to tackle.',effect:'control',amount:.55},
+ dink:{name:'Cheeky dink',short:'CHEEKY DINK',icon:'ball',text:'Unlock a chip that lifts the ball over tackles.',effect:'chip',amount:1},
+ range:{name:'Have a go',short:'HAVE A GO',icon:'boots',text:'Shoot from 8 metres further out.',effect:'shotRange',amount:8},
+ thought:{name:'Second thought',short:'SECOND THOUGHT',icon:'watch',text:'Another rewind. Change your last decision.',effect:'rewind',amount:1},
+ tape:{name:'Tape it up',short:'TAPE IT UP',icon:'tape',text:'Recover one of your three legs.',effect:'heal',amount:1},
 };
-
-export const STARTER = ['touch', 'touch', 'run', 'run', 'pass', 'pass', 'breathe', 'tea', 'finish', 'finish', 'toe', 'badknee'];
-export const REWARDS = Object.keys(CARDS).filter(id => CARDS[id].rare);
-export const EVENTS = [
-  { title: 'Just the one?', kicker: 'Saturday, 9:46pm · The Anchor & Crown', body: 'Kev has bought a round. Someone has put the jukebox on. You did say you were getting an early night.', choices: [
-    { label: 'Get yourself home', text: 'Start next match with +1 leg in every attack.', energy: 1 },
-    { label: 'Stay for the team bonding', text: 'Add Kev on the overlap. Start next match with +12 pressure.', add: 'overlap', pressure: 12 },
-  ] },
-  { title: 'The boot of his car.', kicker: 'Sunday, 9:12am · The car park', body: 'The gaffer has a pair of nearly-new boots and a bag of suspicious oranges. You are allowed one.', choices: [
-    { label: 'Take the boots', text: '+10% starting chance next match.', quality: 10 },
-    { label: 'Take the oranges', text: 'Add Half-time orange to your deck.', add: 'tea' },
-  ] },
-  { title: 'A quiet word with the gaffer.', kicker: 'Thursday, 7:05pm · Training', body: 'He has actually put cones out. This could be serious. What do you want to work on?', choices: [
-    { label: 'Finishing practice', text: 'Add Side-foot it. +5% starting chance next match.', add: 'finish', quality: 5 },
-    { label: 'Sort that knee out', text: 'Remove Dodgy knee, or trim a First touch if your knee is fine.', remove: true },
-  ] },
-];
-
-export const UPGRADES = {
-  training: { name: 'Wednesday five-a-side', price: 35, max: 3, text: '+3% starting chance in every attack. Three levels.' },
-  warmup: { name: 'An actual warm-up', price: 50, max: 1, text: '+1 leg in the first attack of every match.' },
+export const UPGRADES={
+ training:{name:'Wednesday five-a-side',price:35,max:3,text:'+0.5m to every run. Three levels.'},
+ warmup:{name:'An actual warm-up',price:50,max:1,text:'One extra sprint in every attack.'},
 };
+export const clone=v=>structuredClone(v);
+export const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
+export const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
+export const lerp=(a,b,f)=>({x:a.x+(b.x-a.x)*f,z:a.z+(b.z-a.z)*f});
+const cleanPoint=p=>({x:clamp(p.x,BOUNDS.left,BOUNDS.right),z:clamp(p.z,BOUNDS.top,BOUNDS.bottom)});
+export function route(start,requested,budget){
+ const points=[{x:start.x,z:start.z}];let remaining=budget;
+ for(const raw of requested||[]){
+  if(!Number.isFinite(raw?.x)||!Number.isFinite(raw?.z))continue;
+  const p=cleanPoint(raw),prev=points.at(-1),d=distance(prev,p);
+  if(d<.15)continue;
+  if(d>=remaining){points.push(lerp(prev,p,remaining/d));break;}
+  points.push(p);remaining-=d;
+ }
+ return points;
+}
+export function routeLength(points){let d=0;for(let i=1;i<points.length;i++)d+=distance(points[i-1],points[i]);return d;}
+export function along(points,travelled){
+ for(let i=1;i<points.length;i++){const d=distance(points[i-1],points[i]);if(travelled<=d)return lerp(points[i-1],points[i],d?travelled/d:0);travelled-=d;}
+ return {...points.at(-1)};
+}
+const toward=(a,b,metres)=>lerp(a,b,Math.min(1,metres/(distance(a,b)||1)));
+export function defaultProfile(){return {version:2,kitty:0,training:0,warmup:0,runs:0,cups:0,best:0};}
+export function readProfile(storage){
+ try{
+  const saved=JSON.parse(storage.getItem('sunday-pitch-profile')||storage.getItem('sunday-profile')||'null');
+  if(!saved||![1,2].includes(saved.version))return defaultProfile();
+  const p=defaultProfile();
+  for(const k of ['kitty','runs','cups','best'])if(Number.isSafeInteger(saved[k])&&saved[k]>=0)p[k]=saved[k];
+  p.training=clamp(Math.floor(Number(saved.training)||0),0,3);p.warmup=clamp(Math.floor(Number(saved.warmup)||0),0,1);return p;
+ }catch{return defaultProfile();}
+}
+export function saveProfile(storage,p){try{storage.setItem('sunday-pitch-profile',JSON.stringify(p));return true;}catch{return false;}}
+export function purchase(p,id){const u=UPGRADES[id];if(!u||p[id]>=u.max||p.kitty<u.price)return false;p.kitty-=u.price;p[id]++;return true;}
 
-export function defaultProfile() { return { version: SAVE_VERSION, kitty: 0, training: 0, warmup: 0, runs: 0, cups: 0, best: 0 }; }
-export function readProfile(storage) {
-  try {
-    const p = JSON.parse(storage.getItem('sunday-profile') || 'null');
-    if (!p || p.version !== SAVE_VERSION) return defaultProfile();
-    const clean = defaultProfile();
-    for (const key of ['kitty', 'runs', 'cups', 'best']) if (Number.isSafeInteger(p[key]) && p[key] >= 0) clean[key] = p[key];
-    clean.training = Math.min(3, Math.max(0, Math.floor(Number(p.training) || 0)));
-    clean.warmup = Math.min(1, Math.max(0, Math.floor(Number(p.warmup) || 0)));
-    return clean;
-  } catch { return defaultProfile(); }
-}
-export function saveProfile(storage, profile) {
-  try { storage.setItem('sunday-profile', JSON.stringify(profile)); return true; } catch { return false; }
-}
-export function purchase(profile, id) {
-  const u = UPGRADES[id];
-  if (!u || profile[id] >= u.max || profile.kitty < u.price) return false;
-  profile.kitty -= u.price; profile[id]++; return true;
-}
-
-export class Run {
-  constructor(seed = Date.now(), profile = defaultProfile()) {
-    this.seed = Number(seed) >>> 0;
-    this.rng = this.seed || 1;
-    this.profile = { ...profile };
-    this.deck = [...STARTER];
-    this.fixtureIndex = 0;
-    this.totalGoals = 0;
-    this.wins = 0;
-    this.bank = 0;
-    this.history = [];
-    this.boon = {};
-    this.phase = 'ready';
-    this.claimed = false;
-    this.uid = 0;
-    this.log = [];
+export class Run{
+ constructor(seed=Date.now(),profile=defaultProfile()){
+  this.seed=Number(seed)>>>0;this.rng=this.seed||1;this.profile={...profile};
+  this.fixtureIndex=0;this.phase='ready';this.lives=3;this.goals=0;this.bank=0;this.rewinds=1;
+  this.gear=[];this.history=[];this.attempt=0;this.claimed=false;
+  this.buffs={range:0,bursts:0,passes:0,control:0,chip:0,shotRange:0};
+ }
+ get fixture(){return FIXTURES[this.fixtureIndex];}
+ get runRange(){return 11+this.profile.training*.5+this.buffs.range;}
+ get shotRange(){return 26+this.buffs.shotRange;}
+ get tackleRadius(){return 2.15-this.buffs.control;}
+ random(){let t=this.rng+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296;}
+ start(){if(this.phase!=='ready')return false;this.newAttack();return true;}
+ newAttack(){
+  this.attempt++;
+  const mirror=this.attempt===1?1:(this.random()>.5?-1:1),shift=this.fixtureIndex?(this.random()-.5)*3:0;
+  const p=[
+   [[-11,9,-3,6][this.fixtureIndex],this.fixtureIndex*1.5,0,'you'],[-21,-22,0,'kev'],[20,-24,0,'daz'],[7,-1,0,'mo'],[-22,16,0,'lee'],[24,20,0,'al'],[1,30,0,'gaz'],
+   [-3,-21,1,'marker'],[10,-29,1,'cover'],[-15,-33,1,'cover'],[13,-14,1,'marker'],[-23,-25,1,'cover'],[0,-37,1,'cover'],
+   [25,24,1,'deep'],[0,-45,2,'keeper'],[0,45,2,'home-keeper'],[-29,-2,3,'ref'],[44,16,3,'bench'],[44,23,0,'bench'],[-44,-17,3,'bench'],
+  ];
+  const activeEnd=7+this.fixture.defenders;
+  this.state={
+   actors:p.map((a,i)=>({id:i,x:a[0]*(i<14?mirror:1)+(i>=7&&i<activeEnd?shift:0),z:i>=activeEnd&&i<13?19+(i-10)*6:a[1],team:a[2],role:a[3],active:i>=7&&i<activeEnd})),
+   beats:this.fixture.beats,bursts:1+this.profile.warmup+this.buffs.bursts,passes:1+this.buffs.passes,lastMove:{x:0,z:-1},
+  };
+  this.state.ball={x:this.state.actors[0].x+.5,z:this.state.actors[0].z-1,y:.6};
+  this.intents=this.makeIntents();this.phase='planning';this.before=null;this.lastResult=null;
+  this.message=this.attempt===1?'Find a way through. They move when you do.':'New attack. A different angle. Same dodgy knee.';
+ }
+ makeIntents(){
+  const player=this.state.actors[0];
+  return this.state.actors.map((a,i)=>{
+   if(a.active){
+    const target=a.role==='marker'?{x:player.x+this.state.lastMove.x*3,z:player.z+this.state.lastMove.z*3}:{x:player.x*.55+(i===8?6:i===9?-6:0),z:Math.min(player.z-8,-29)};
+    return {...toward(a,cleanPoint(target),this.fixture.speed),id:i};
+   }
+   if(i===14)return {...toward(a,{x:clamp(player.x*.48,-4.8,4.8),z:-44.8},this.fixture.keeper),id:i};
+   if(i>0&&i<4)return {x:clamp(a.x+(player.x-a.x)*.07,-29,29),z:Math.max(-37,a.z-2),id:i};
+   return {x:a.x,z:a.z,id:i};
+  });
+ }
+ normalise(order){
+  if(this.phase!=='planning'||!order||!['run','one-two','shot'].includes(order.kind))return {error:'Choose a run, a teammate or a corner of the goal.'};
+  const player=this.state.actors[0];
+  if(order.kind==='shot'){
+   if(!Number.isFinite(order.target?.x))return {error:'Pick a corner of the goal.'};
+   const target={x:clamp(order.target.x,GOAL.left,GOAL.right),z:GOAL.z-1};
+   if(distance(player,target)>this.shotRange)return {error:`Too far out. Get within ${this.shotRange}m of goal.`};
+   if(order.chip&&!this.buffs.chip)return {error:'You have not learned the cheeky dink yet.'};
+   return {kind:'shot',target,chip:!!order.chip,path:[{x:player.x,z:player.z}]};
   }
-  random() {
-    let t = this.rng += 0x6D2B79F5;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  const burst=!!order.burst;
+  if(burst&&this.state.bursts<1)return {error:'No sprints left in this attack.'};
+  if(order.kind==='one-two'){
+   const ally=this.state.actors[order.ally];
+   if(![1,2,3].includes(order.ally)||!ally)return {error:'Pick one of your red shirts.'};
+   if(this.state.passes<1)return {error:'No one-twos left in this attack.'};
+   if(distance(player,ally)>29)return {error:'He is too far away to hear you.'};
   }
-  shuffle(items) {
-    const copy = [...items];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(this.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
+  const budget=this.runRange+(burst?7:0)+(order.kind==='one-two'?2:0),path=route(player,order.path,budget);
+  if(path.length<2)return {error:'Click the grass to choose your run.'};
+  return {kind:order.kind,path,budget,burst,ally:order.ally};
+ }
+ preview(order){
+  const clean=this.normalise(order);if(clean.error)return {valid:false,error:clean.error};
+  const r=this.simulate(clean,false);
+  return {valid:true,order:clean,type:r.type,hit:r.hit,point:r.point,detail:r.detail,end:r.end.actors[0],ball:r.end.ball};
+ }
+ simulate(order,record=false){
+  const start=this.state,positions=start.actors.map(a=>({...a})),origin={...start.actors[0]},end=clone(start);
+  const frames=record?new Float32Array((STEPS+1)*STRIDE):null;
+  let count=0,type='move',detail='',hit=null,point=null,ball={...start.ball};
+  const pathLength=order.kind==='shot'?0:routeLength(order.path),travelTime=order.kind==='shot'?distance(start.ball,order.target)/(order.chip?27:38):BEAT;
+  const moving=order.kind!=='shot',firstPass=order.kind==='one-two'?lerp(start.actors[order.ally],this.intents[order.ally],.3):null;
+  const returnPoint=order.kind==='one-two'?along(order.path,order.budget*.8):null;
+  for(let step=0;step<=STEPS;step++){
+   const f=step/STEPS,time=f*BEAT;
+   for(let i=0;i<ACTORS;i++){const a=start.actors[i],intent=this.intents[i];positions[i].x=a.x+(intent.x-a.x)*f;positions[i].z=a.z+(intent.z-a.z)*f;}
+   if(moving)Object.assign(positions[0],along(order.path,Math.min(pathLength,order.budget*f)));
+   if(order.kind==='shot'){
+    const progress=Math.min(1,time/travelTime);ball={...lerp(start.ball,order.target,progress),y:.6+(order.chip?Math.sin(progress*Math.PI)*7:Math.sin(progress*Math.PI)*.7)};
+   }else if(order.kind==='one-two'&&f<.8){
+    ball=f<=.3?{...lerp(start.ball,firstPass,f/.3),y:.7}:{...lerp(firstPass,{x:returnPoint.x+.5,z:returnPoint.z-1},(f-.3)/.5),y:.7};
+   }else ball={x:positions[0].x+.5,z:positions[0].z-1,y:.6};
+   if(step>0){
+    for(let i=7;i<=14;i++){
+     if(i!==14&&!positions[i].active)continue;
+     const radius=i===14?2.7:this.tackleRadius;
+     if(ball.y<(i===14?3:2.2)&&distance(positions[i],ball)<radius){
+      type=i===14?'save':order.kind==='one-two'&&f<.8?'intercept':'tackle';hit=i;point={x:ball.x,z:ball.z};
+      detail=i===14?'Keeper got there. Could you pull him towards the other post?':type==='intercept'?'He cut out the return ball. The dashed line crossed his run.':'Caught in possession. Go around his path, or get the ball to Kev.';break;
+     }
     }
-    return copy;
+    if(hit===null&&type==='move'&&order.kind==='shot'&&time>=travelTime){type='goal';detail='In the corner. Someone has spilled their tea.';}
+   }
+   if(frames){const offset=count*STRIDE;for(let i=0;i<ACTORS;i++){frames[offset+i*2]=positions[i].x;frames[offset+i*2+1]=positions[i].z;}frames[offset+ACTORS*2]=ball.x;frames[offset+ACTORS*2+1]=ball.z;frames[offset+ACTORS*2+2]=ball.y;}
+   count++;if(type!=='move')break;
   }
-  get fixture() { return FIXTURES[this.fixtureIndex]; }
-  get remaining() { return this.fixture.attacks - this.attack; }
-  get minute() { return Math.min(90, Math.round(this.attack / this.fixture.attacks * 90)); }
-  get matchWon() { return this.goals > this.fixture.score; }
-  startMatch() {
-    if (this.phase !== 'ready') return false;
-    this.goals = 0; this.attack = 0;
-    this.drawPile = this.shuffle(this.deck);
-    this.discard = []; this.hand = [];
-    this.log = [];
-    this.beginChance();
-    return true;
-  }
-  beginChance() {
-    this.phase = 'playing';
-    this.attack++;
-    this.quality = 18 + this.profile.training * 3 + (this.boon.quality || 0);
-    this.pressure = Math.max(0, this.fixture.pressure + (this.boon.pressure || 0));
-    this.energy = 3 + (this.boon.energy || 0) + (this.attack === 1 ? this.profile.warmup : 0);
-    this.lastType = null;
-    this.actions = 0;
-    this.hand = [];
-    this.draw(5);
-    this.note(`Attack ${this.attack}. You find a pocket of space.`, 'new');
-  }
-  draw(count) {
-    for (let i = 0; i < count && this.hand.length < MAX_HAND; i++) {
-      if (!this.drawPile.length) {
-        if (!this.discard.length) break;
-        this.drawPile = this.shuffle(this.discard);
-        this.discard = [];
-      }
-      this.hand.push({ id: this.drawPile.pop(), uid: ++this.uid });
-    }
-  }
-  shotChance(cardId = 'scramble') {
-    const c = CARDS[cardId];
-    let bonus = c ? (c.bonus || 0) : -14;
-    if (c?.calmBonus && this.pressure < 40) bonus += c.calmBonus;
-    if (c?.linkBonus && this.lastType === 'Link-up') bonus += c.linkBonus;
-    return Math.min(95, Math.max(5, Math.round(this.quality + bonus)));
-  }
-  preview(cardId) {
-    const c = CARDS[cardId];
-    if (!c) return null;
-    const tax = c.shot || c.pressure < 0 || c.curse ? 0 : this.fixture.tax;
-    const nextPressure = Math.max(0, this.pressure + (c.pressure || 0) + tax);
-    return { chance: c.shot ? this.shotChance(cardId) : Math.min(95, this.quality + (c.quality || 0)), pressure: nextPressure, tackle: !c.shot && nextPressure >= 100, tax };
-  }
-  canPlay(uid) {
-    const entry = this.hand.find(c => c.uid === uid);
-    return this.phase === 'playing' && !!entry && this.energy >= CARDS[entry.id].cost;
-  }
-  play(uid) {
-    if (!this.canPlay(uid)) return null;
-    const index = this.hand.findIndex(c => c.uid === uid);
-    const entry = this.hand[index];
-    const c = CARDS[entry.id];
-    this.hand.splice(index, 1);
-    this.energy -= c.cost;
-    this.actions++;
-    // Resolve before discarding so a draw cannot redraw the card being played.
-    if (c.shot) {
-      const result = this.shoot(entry.id);
-      this.discard.push(entry.id);
-      return result;
-    }
-    const preview = this.preview(entry.id);
-    this.quality = Math.min(95, this.quality + (c.quality || 0));
-    this.pressure = preview.pressure;
-    this.energy = Math.min(8, this.energy + (c.energy || 0));
-    this.lastType = c.type;
-    this.note(`${c.name}. ${c.quote}`, 'play');
-    if (this.pressure >= 100) {
-      this.discard.push(entry.id);
-      this.phase = 'resolution';
-      const result = { type: 'tackle', card: entry.id, text: 'Crowded out. You held it a moment too long.', chance: 0 };
-      this.lastResult = result;
-      this.note(result.text, 'bad');
-      return result;
-    }
-    this.draw(c.draw || 0);
-    this.discard.push(entry.id);
-    return { type: 'setup', card: entry.id, quality: this.quality, pressure: this.pressure };
-  }
-  shoot(cardId = 'scramble') {
-    if (this.phase !== 'playing') return null;
-    const chance = this.shotChance(cardId);
-    const roll = this.random() * 100;
-    const goal = roll < chance;
-    if (goal) { this.goals++; this.totalGoals++; this.bank += 5; }
-    this.phase = 'resolution';
-    const text = goal ? ['Bottom corner. The touchline erupts.', 'In off the post. You absolutely meant that.', 'Keeper beaten. Someone spills their tea.'][Math.floor(this.random() * 3)]
-      : chance >= 65 ? 'The keeper gets a hand to it. That was a proper chance.' : 'Wide. Someone is fetching that from the allotments.';
-    const result = { type: goal ? 'goal' : 'miss', card: cardId, chance, roll, text };
-    this.lastResult = result;
-    this.note(text, goal ? 'good' : 'bad');
-    return result;
-  }
-  scramble() {
-    if (this.phase !== 'playing' || this.energy < 1) return null;
-    this.energy--;
-    return this.shoot();
-  }
-  abandon() {
-    if (this.phase !== 'playing') return null;
-    this.phase = 'resolution';
-    this.lastResult = { type: 'waste', text: 'You lay it back. A fresh attack, a little less time.' };
-    this.note(this.lastResult.text, 'bad');
-    return this.lastResult;
-  }
-  nextChance() {
-    if (this.phase !== 'resolution') return false;
-    this.discard.push(...this.hand.map(c => c.id));
-    this.hand = [];
-    if (this.attack >= this.fixture.attacks) {
-      this.finishMatch();
-    } else this.beginChance();
-    return true;
-  }
-  finishMatch() {
-    const won = this.matchWon;
-    this.history.push({ fixture: this.fixtureIndex, goals: this.goals, against: this.fixture.score, won });
-    this.boon = {};
-    if (!won) { this.phase = 'lost'; return; }
-    this.wins++; this.bank += 15;
-    if (this.fixtureIndex === FIXTURES.length - 1) { this.phase = 'champion'; return; }
-    this.offers = this.shuffle(REWARDS).slice(0, 3);
-    this.phase = 'reward';
-  }
-  pickReward(id) {
-    if (this.phase !== 'reward' || !this.offers.includes(id)) return false;
-    this.deck.push(id);
-    this.phase = 'event';
-    return true;
-  }
-  get event() { return EVENTS[this.fixtureIndex]; }
-  chooseEvent(index) {
-    if (this.phase !== 'event' || !Number.isInteger(index)) return false;
-    const c = this.event.choices[index];
-    if (!c) return false;
-    if (c.add) this.deck.push(c.add);
-    if (c.remove) {
-      const i = this.deck.indexOf(this.deck.includes('badknee') ? 'badknee' : 'touch');
-      if (i >= 0) this.deck.splice(i, 1);
-    }
-    this.boon = { energy: c.energy || 0, quality: c.quality || 0, pressure: c.pressure || 0 };
-    this.fixtureIndex++;
-    this.phase = 'ready';
-    return true;
-  }
-  claim(profile) {
-    if (!['lost', 'champion'].includes(this.phase) || this.claimed) return false;
-    profile.kitty += this.bank;
-    profile.runs++;
-    profile.best = Math.max(profile.best, this.totalGoals);
-    if (this.phase === 'champion') profile.cups++;
-    this.claimed = true;
-    return true;
-  }
-  note(text, type) { this.log.unshift({ text, type }); this.log.length = Math.min(12, this.log.length); }
+  end.actors=positions;end.ball=ball;end.beats--;
+  if(moving){const delta={x:positions[0].x-origin.x,z:positions[0].z-origin.z},length=Math.hypot(delta.x,delta.z)||1;end.lastMove={x:delta.x/length,z:delta.z/length};if(order.burst)end.bursts--;if(order.kind==='one-two')end.passes--;}
+  if(type==='move'&&end.beats<=0){type='whistle';detail='The chance has gone. Use a sprint or a one-two to get there sooner.';}
+  return {type,detail,hit,point,end,frames,count,duration:(count-1)/STEPS*BEAT,order};
+ }
+ commit(order){
+  const clean=this.normalise(order);if(clean.error)return {type:'invalid',detail:clean.error};
+  this.before={state:clone(this.state),intents:clone(this.intents),lives:this.lives,message:this.message};
+  const r=this.simulate(clean,true);this.state=r.end;
+  if(r.type==='goal'){this.goals++;this.bank+=20;this.phase='goal';this.history.push({name:this.fixture.short,attempt:this.attempt});}
+  else if(r.type!=='move'){this.lives--;this.phase='setback';}
+  else{this.phase='planning';this.intents=this.makeIntents();}
+  this.message=r.detail||(clean.kind==='one-two'?'Kev actually gave it back. Now find the finish.':'New positions. New intentions. Look before you go.');
+  this.lastResult={type:r.type,detail:this.message};return r;
+ }
+ rewind(){
+  if(!this.before||!['planning','setback'].includes(this.phase)||this.rewinds<1)return false;
+  this.state=clone(this.before.state);this.intents=clone(this.before.intents);this.lives=this.before.lives;this.rewinds--;this.before=null;this.phase='planning';this.lastResult=null;this.message='Same two seconds. Make a different decision.';return true;
+ }
+ continue(){
+  if(this.phase==='setback'){if(this.lives<=0)this.phase='over';else this.newAttack();return true;}
+  if(this.phase==='goal'){
+   this.before=null;if(this.fixtureIndex===FIXTURES.length-1){this.phase='champion';return true;}
+   const available=Object.keys(GEAR).filter(id=>!this.gear.includes(id)||['thought','tape'].includes(id));this.offers=[];
+   while(this.offers.length<3&&available.length)this.offers.push(available.splice(Math.floor(this.random()*available.length),1)[0]);
+   this.phase='pickup';return true;
+  }return false;
+ }
+ collect(id){
+  if(this.phase!=='pickup'||!this.offers.includes(id))return false;
+  const g=GEAR[id];this.gear.push(id);
+  if(g.effect==='rewind')this.rewinds++;else if(g.effect==='heal')this.lives=Math.min(3,this.lives+1);else this.buffs[g.effect]+=g.amount;
+  this.fixtureIndex++;this.attempt=0;this.newAttack();return true;
+ }
+ claim(profile){
+  if(!['over','champion'].includes(this.phase)||this.claimed)return false;
+  profile.kitty+=this.bank;profile.runs++;profile.best=Math.max(profile.best,this.goals);if(this.phase==='champion')profile.cups++;
+  this.claimed=true;return true;
+ }
 }

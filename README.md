@@ -1,31 +1,55 @@
-# SUNDAY
+# SUNDAY — The Next Two Seconds
 
-**You've got work in the morning.**
+**The pitch is the game.**
 
-A turn-based Sunday league deckbuilding roguelite set in fictional Saltmere, on the English coast. You play the striker for The Anchor & Crown. The pitch takes its visual cues from Amiga-era Sensible Soccer: overhead striped grass, tiny original pixel footballers, chunky score panels and a limited palette.
+A Sunday league roguelite set in fictional Saltmere. You are the striker for The Anchor & Crown. The full-screen, Amiga-inspired Three.js pitch freezes while you think. Plot your run directly on the grass, read the defence's intentions, then let everybody move together for two seconds.
 
-Three.js stages your decisions. Cards, rather than real-time movement, decide what happens.
+[**Play SUNDAY on GitHub Pages**](https://southernadd-cmyk.github.io/sunday/)
 
-## Play
+## How to play
 
-Public hosting is configured for [SUNDAY on GitHub Pages](https://southernadd-cmyk.github.io/sunday/). The separate [ChatGPT preview](https://sunday-saltmere.adamclement00.chatgpt.site) is private to its owner.
+1. **Read the pitch.** The yellow ring is you. Orange paths show each defender's already-committed next movement; circles mark their destinations.
+2. **Plan your run.** Click the grass for a straight run, or drag a route beginning near your yellow ring. Your ghost shows its endpoint. Distance is limited, so a far-away click is shortened to your travel budget.
+3. **Use your teammates.** Click a red shirt's name to ask for a one-two, then choose the return run on the grass. You can pass a defender while the ball is away; the ball itself can still be intercepted.
+4. **Find a finish.** Get into shooting range, read the keeper's movement and click a corner target or a point inside the goalmouth. A learned dink can go over low tackles.
+5. **Play two seconds.** Press Space or the yellow button. The route, ball and defenders move together, then freeze again. There is no real-time input during playback.
 
-1. Start a cup run. Read the match's comeback target and kick off.
-2. Play cards to raise your scoring chance. The number at the top right costs **legs**.
-3. Watch **pressure**. Build-up brings defenders closer; at 100 you are crowded out and lose the attack. Head up reduces pressure and draws a card.
-4. Play a **Shot** card. Its footer gives your exact chance of scoring, including card bonuses. Keep a leg for a shot unless you have the free Toe punt.
-5. Each attack starts a new hand with fresh legs. Six attacks in early matches, seven later. Finish ahead to progress; a draw knocks you out.
-6. After a win, draft a card and make a choice between Sundays. Win four matches to lift the cup.
+Goals, saves and tackles come from the actual time-sampled positions and ball height. **There is no shot-percentage dice roll.** The planning preview and playback use the same simulation.
 
-No Shot card? **Scramble a shot** is always available for one leg, with a 14-point chance penalty. No usable legs? **Let this chance go** moves on without trapping the game.
+Score to reach the next Sunday. There are four opponents, increasing defensive pressure, and three legs for the run. A lost attack costs one leg. Each attack gives six or seven turns to score. One rewind lets you change your last decision, including recovering a leg lost in that turn.
 
-Every goal adds £5, every win £15. At the end of a run, the kitty is banked even if you lose. The Club Shed sells small permanent upgrades; your deck resets on the next run. The starter deck includes one Dodgy knee, which you can remove through a training event.
+After each goal, collect one of three pieces of kit lying on the pitch. Boots, second winds, close control, extra one-twos, longer shots and dinks change what you can do spatially for the rest of the run. Four goals win the cup. A run earns £20 per goal, banked when it ends.
 
-**Controls:** click or tap cards; 1–8 plays the corresponding card; S scrambles a shot; Enter continues; Esc closes a dialog. On small screens, swipe the hand to see further cards. Sound is optional and starts muted.
+## Controls
 
-## Run locally
+| Input | Action |
+| --- | --- |
+| Click or tap grass | Plan a run |
+| Drag from your yellow ring | Draw a curved route |
+| Click a red-shirted teammate's label | Set up a one-two |
+| Click the goal or LEFT / RIGHT target | Aim a shot |
+| Space | Play the planned two seconds |
+| Arrows / WASD | Plan a run in that direction |
+| Q / E | Plan a diagonal forward run |
+| P | Ask Kev for a one-two |
+| 1 / 2 | Aim at the left / right corner |
+| B | Toggle a sprint |
+| C | Toggle a dink, after learning it |
+| R | Rewind the last turn |
+| Enter | Start or continue |
+| Escape | Clear the plan or close help |
 
-Requires Node.js 20.19+ or 22.12+.
+Sound starts muted. LO-FI uses a smaller framebuffer. Fullscreen is optional; the app already fills the browser viewport.
+
+## Progress
+
+The Club Shed keeps small permanent preparations between runs. Existing kitty and upgrades from the first card prototype are migrated when the new profile is first saved. Training adds 0.5m per level to each run; a warm-up adds a sprint per attack.
+
+Only the club profile is saved. Refreshing or closing a tab ends the in-progress run. The old card prototype remains in Git history; the public game now uses the pitch-based rules.
+
+## Develop
+
+Node.js 20.19+ or 22.12+:
 
 ```sh
 npm ci
@@ -38,43 +62,23 @@ npm run build
 npm run preview
 ```
 
-The production output is `dist/`, with relative asset paths for static hosting. No CDN, backend, account, paid asset, external font request or API key is required. Serve the directory over HTTP; ES modules do not support opening `index.html` directly with `file://`.
+Static output is `dist/` with relative asset paths, including under `/sunday/`. There are no CDN assets, API keys, backend services or external font requests. Serve over HTTP rather than opening ES modules with `file://`.
 
-## GitHub Pages
+The single **Check and publish SUNDAY** workflow tests and builds code changes once and publishes that checked artifact from `main`. Pull requests run checks without deployment. Markdown-only changes skip it. GitHub Pages uses **Settings → Pages → Source → GitHub Actions**.
 
-The single **Check and publish SUNDAY** workflow tests and builds each code push once, then publishes that exact `dist/` artifact from `main`. Pull requests run the checks without deployment. Markdown-only changes skip the workflow. It can also be run manually from Actions.
+## Implementation
 
-GitHub requires one-time activation under **Settings → Pages → Build and deployment → Source → GitHub Actions**. After activation, rerun the failed deployment job or run the workflow manually. No custom domain or repository secrets are needed.
+- A pure deterministic engine in `src/engine.js`, independent of DOM, rendering, clocks and animation rate.
+- The same fixed-step simulation predicts collisions and records playback frames.
+- Committed defender intentions cannot retarget after you choose an order.
+- An original pixel atlas, instanced footballers and shared unlit geometry in Three.js.
+- The pitch covers the viewport; SVG routes and DOM controls are projected through the same orthographic camera.
+- A framebuffer capped at 640 pixels wide, or 384 in LO-FI. No device-pixel-ratio scaling, physics library, dynamic lighting, shadows or post-processing.
+- While planning, the renderer sleeps until something changes. Animation also stops when the tab is hidden.
+- A cached canvas compatibility renderer projects the same Three.js scene when WebGL2 is unavailable.
 
-## Prototype scope
+`window.sundayPerformance()` reports renderer diagnostics. `/tests/viewport.html` provides mobile layout fixtures on the development server and is excluded from the production build.
 
-- Four comeback fixtures, rather than a simulation of all 22 players and 90 minutes.
-- A 12-card starter deck, 8 reward cards, 3 events with 2 choices each, and 2 permanent upgrades.
-- Seeded rules and shuffle; displayed probabilities are the probabilities used to roll shots.
-- The opponent's goals are a fixed scenario target. Opponents do not score extra goals during an attack.
-- Weather affects the match through its visible pressure rule. It does not run a hidden ball-physics modifier.
-- Local storage saves the club profile only. An in-progress run does not survive refreshing or closing the page.
+The [prototype plan](docs/PROTOTYPE_PLAN.md) describes the new direction. [Validation notes](docs/VALIDATION.md) record the checks and their limits. `node scripts/balance.mjs 12` searches twelve seeded runs to smoke-test solvability, rather than estimate human win rates.
 
-The [prototype plan](docs/PROTOTYPE_PLAN.md) records the design, intentional limits and next playtest questions.
-
-## Rendering and performance
-
-- Three.js orthographic scene, an original canvas-drawn sprite atlas and nearest-neighbour filtering.
-- Instanced players, spectators, goal frames and touchline details. Shared geometry and materials.
-- Unlit materials: no real-time lighting, dynamic shadows, physics engine or post-processing.
-- A framebuffer capped at 640 pixels wide, independent of device pixel ratio. LO-FI reduces it to 384 pixels and caps animation at 20 fps instead of 30.
-- Animation stops while the document is hidden. The scene and atlas are reused across matches.
-- If WebGL2 is unavailable, a small compatibility renderer projects the same Three.js scene and caches static scenery. Card play remains available.
-- Self-hosted Latin font subsets; Three.js is built into a separate cacheable chunk.
-
-`window.sundayPerformance()` returns read-only renderer diagnostics. The pure rules in `src/engine.js` do not depend on WebGL, animation timing or frame rate.
-
-## Checks
-
-`npm test` exercises 23 behavioural checks, including full-run transitions, deck conservation, exact shot bonuses, tackle thresholds, rewards, banking and denied storage.
-
-`node scripts/balance.mjs` plays 1,500 seeded runs with a simple policy that cannot see future draws or shot rolls. Current unupgraded cup completion: **24.5%**. This checks that the run can be completed and terminates; it is not a prediction of human difficulty.
-
-For manual responsive checks, open `/tests/viewport.html` on the dev server. This fixture is not included in the production build.
-
-Original art and game code are in this repository. Sensible Soccer is a visual reference; no original sprites, sounds, logo or game data are included. Bundled libraries and fonts retain their respective upstream licences.
+All sprites, pitch art and code are original to this project. Sensible Soccer is a visual reference; no original game sprites, sounds or data are included. Third-party library and font licences are bundled under `public/licenses/`.

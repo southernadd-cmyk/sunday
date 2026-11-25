@@ -1,64 +1,49 @@
-# SUNDAY: first playable
+# The Next Two Seconds
 
-## The idea
+## A different centre of gravity
 
-Be the number nine in an English pub team. The fun comes from constructing an improbable chance with the hand you have, and deciding whether to push it further before the defence crowds you out. The setting should supply the choices, jokes and character; it should not depend on being a good arcade football simulation.
+The first prototype put the decisions in a hand of cards and used football as a display. This version makes the Sensible Soccer-style screen the interface. Read positions, choose a route on the grass, then watch the consequences there.
 
-Saltmere is fictional. The Anchor & Crown, its opponents and all the artwork are invented. The visual target is the clarity and small-scale charm of Sensible Soccer on the Amiga, rendered with Three.js and original pixel assets.
+The match waits for the player. Nobody needs arcade reflexes or a football physics simulator to enjoy the decisions. The player controls one striker; this is not a team-management screen.
 
-## Core loop
+## One turn
 
-| Stage | What you do | What changes |
-| --- | --- | --- |
-| Match briefing | Read the comeback target and pitch pressure rule | Your risk budget for the next match |
-| Attack | Spend legs on a five-card hand | Chance, pressure, remaining hand and draw pile |
-| Finish | Pick a shot or recycle the chance | A probability roll determines the goal; an attack is spent |
-| Win | Draft one of three rare cards | The deck grows for this run |
-| Between Sundays | Make one of two life choices | A lasting deck change or a one-match bonus |
-| End of run | Bank earned money and visit the shed | Small upgrades survive; the deck resets |
+While the match is frozen, defenders have already committed their next two-second movements. Orange paths show their routes and destinations. The player can then:
 
-## The decisions worth testing
+- Run with the ball, including a drawn bend around a defender.
+- Spend a limited sprint to cover more ground.
+- Give a teammate the ball and run onto the return pass.
+- Aim a ground shot or, with the appropriate upgrade, a dink.
 
-**Spend or shoot.** Movement creates better chances but costs legs and pressure. A 0-cost Toe punt has lower accuracy; a Side-foot it needs a reserved leg. The fallback shot prevents an unlucky hand from becoming a dead end.
+Pressing Play moves all those bodies and the ball together. Time then stops again. Collisions are tested at the same time samples that produce the animation, and previews run that same calculation. There is no hidden probability roll after selecting a good spatial plan.
 
-**Flair or safety.** Through his legs gives a large chance gain at a high pressure cost. Drop a shoulder improves your chance while relieving pressure. Exact shot probabilities and tackle warnings make failure attributable to a visible risk.
+A safe endpoint is not enough: a route can be tackled on the way. A passing lane can cross a defender's movement. A goalkeeper can be drawn towards one post before the striker takes the other corner. These should be readable football problems.
 
-**Build around a reward.** On the volley pays off immediately after a Link-up card. Cheeky little dink rewards keeping pressure below 40. Second wind permits a longer sequence. These are the beginnings of distinct decks, rather than a large catalogue of equivalent numeric upgrades.
+## The run
 
-**Take care of yourself or collect another card.** An early night gives extra legs for one match. Staying out adds a powerful persistent Link-up card and next-match pressure. Training can remove the starting Dodgy knee. Permanent upgrades are modest, with low level caps, so repeated runs should not replace tactical decisions.
+Four Sunday opponents build from a loose back line to a crowded defence. Each encounter is a next-goal-wins attacking situation, rather than a full simulation of ninety minutes. Three legs are shared across the run. A wasted, tackled or saved attack costs a leg. A fresh attack resets the limited turn, sprint and one-two budgets.
 
-## What the prototype deliberately simplifies
+One rewind gives the player a second thought. It restores the actual pre-turn positions and resources and consumes the rewind permanently. It cannot undo a goal or duplicate earnings.
 
-Matches are comeback challenges with fixed opposing scores. There is no tackling input, player steering, transfer market, management screen, team formation editor, simulated league table or real player data. The match clock is an abstract attack counter. A draw ends the run; penalty shoot-outs are not implemented.
+After a goal, the player chooses a piece of kit located on the pitch. Each changes spatial play: longer routes, another sprint, an extra one-two, tighter control, shooting range or ball height. Recovery and extra rewinds are also possible. Rewards have no card hand, deck or draw pile.
 
-Three.js visualises the state and short ball movements. It does not independently decide whether a shot scores. There is no hidden accuracy penalty based on render timing, and animations can be skipped quickly with reduced-motion preferences.
+The small Club Shed remains as persistent progression, and preserves money earned in the earlier prototype. The active run itself is intentionally not saved yet.
 
-The first draft allows runs to be completed in roughly 10–15 minutes, depending on how long decisions take. That estimate needs human playtesting.
+## Screen
 
-## Art direction
+The pitch fills the viewport, with a camera close enough to read the players. Score and fixture information sit in a small corner panel. Resources and the current plan occupy short overlays near the edges. Help, the shed and end-of-attack messages appear only when needed.
 
-- Overhead orthographic pitch; strong alternating green stripes and clear cream lines.
-- Tiny, original 16×16 footballer sprites with red home shirts, white shorts and blue opposition shirts.
-- Pixel-sharp low-resolution rendering, limited colour, basic goal frames and a sparse touchline crowd.
-- Navy panels, yellow selection, cyan secondary information, square borders and restrained bevels.
-- Pixel display typography with readable text for rules. A complete desktop game screen without page scrolling; horizontally swipeable hands on mobile.
-- No copied Sensible Soccer assets. No expensive visual feature that obscures the next decision.
+The route, passing line, keeper movement and ghost destination are all anchored to the grass through the Three.js camera. Mouse, keyboard and touch describe the same plan; none controls the striker in real time.
 
-## First playtest
+Original nearest-neighbour pixel sprites, strong grass stripes, clean pitch lines and the navy/yellow palette carry the Amiga reference. Rendering is capped and sleeps while the match is frozen.
 
-Ask players to complete one attack without explanation, then one run. Observe:
+## What to learn from this playable
 
-1. Do they understand that cards cost legs, and reserve enough to shoot?
-2. Can they explain why pressure matters and when a shot is likely to score?
-3. Is a miss at a good probability frustrating in an interesting way, or merely arbitrary?
-4. Does a reward change how they play the next match?
-5. Do they prefer the deck-building, the life choices, or the football presentation?
-6. Do they immediately want another run after losing?
+1. Does the first movement feel obvious without a separate explanation?
+2. Can a player predict a tackle from the orange route and red collision marker?
+3. Is planning a one-two clearer and more satisfying than simply running around everyone?
+4. Does a kit pickup change the next plan?
+5. Does one rewind encourage learning without removing the tension?
+6. Is the pitch itself enjoyable enough to make another run appealing?
 
-The balance script is a reproducible starting point. Its 24.5% cup rate is for a simple policy across seeds 1–1500, with no permanent upgrades. It does not measure human enjoyment or fairness. The semi-final is intentionally a relative breather after the quarter-final because an equipment bonus and an extra attack can help; the final tightens the target.
-
-## Sensible next slice
-
-Choose the next system after observing a few runs. The most promising expansion is a compact route between matches: a training session, pub visit, physio or boot-sale stop. Each stop should force a deck or condition trade-off. Add a second starting build only when the first has decisions people enjoy.
-
-Later possibilities: explicit injury and morale systems, opponent behaviours that counter different decks, alternative striker styles, small equipment relics, run saves and shareable seeds. These are future work, not features claimed by this prototype.
+The included search policy checks that seed layouts have routes to goal. It is not a human-difficulty estimate, and the opponent AI remains deliberately readable. A later slice could add attacking deliveries, defender styles, moving off-ball starts and different starting strikers. Those should follow playtesting rather than add screens around the pitch.
