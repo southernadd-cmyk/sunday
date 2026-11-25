@@ -136,3 +136,27 @@ test('challenge controls arm a tackle and allow its timing to be adjusted',()=>{
  click(g,'STAND');assert.equal(g.order.kind,'tackle');assert.equal(g.order.tackle,'stand');click(g,'0.5s');assert.equal(g.order.tackleAt,.5);
  click(g,'SLIDE');assert.equal(g.order.tackle,'slide');click(g,'2.0s');assert.equal(g.order.tackleAt,2);assert.ok(g.preview.valid);
 });
+
+test('tutorial is playable from start to finish and does not alter the saved cup',()=>{
+ const g=new Sunday(runtime()),cup=g.run,original=clone(cup.state),profile=clone(g.profile);
+ click(g,'PLAY TUTORIAL');assert.equal(g.practice.index,0);
+ g.planPath([{x:0,z:-6}]);click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
+ click(g,'NEXT DRILL');assert.equal(g.practice.index,1);
+ tapPlayer(g,1);g.planPath([{x:8,z:-11}]);tapPlayer(g,0);click(g,'PASS');tapPlayer(g,1);click(g,'1.5s');click(g,'PLAY 2s');finish(g);
+ assert.equal(g.practice.outcome.passed,true);click(g,'NEXT DRILL');
+ click(g,'SHOOT');g.aim(5.8);click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
+ click(g,'NEXT DRILL');click(g,'STAND');assert.equal(g.preview.tackleOutcome,'won');assert.ok(g.preview.challenge.distance<=g.preview.challenge.reach);
+ click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
+ click(g,'NEXT DRILL');click(g,'SLIDE');assert.equal(g.preview.tackleOutcome,'won');click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,true);
+ click(g,'PLAY THE CUP');assert.equal(g.practice,null);assert.equal(g.run,cup);assert.deepEqual(cup.state,original);assert.deepEqual(g.profile,profile);
+});
+test('a failed drill can be retried with exactly the same scenario',()=>{
+ const g=new Sunday(runtime());click(g,'PLAY TUTORIAL');g.loadDrill(3);const start=clone(g.run.state);
+ g.planPath([{x:25,z:17}]);click(g,'STAND');assert.equal(g.preview.tackleOutcome,'miss');
+ click(g,'PLAY 2s');finish(g);assert.equal(g.practice.outcome.passed,false);click(g,'RETRY DRILL');assert.deepEqual(g.run.state,start);
+ click(g,'STAND');assert.equal(g.preview.tackleOutcome,'won');
+});
+test('tutorial can be reopened from help and works on portrait input',()=>{
+ const g=new Sunday(runtime({width:960,height:2000,cssScale:.375}));click(g,'STEP ONTO THE PITCH');click(g,'?');click(g,'PLAY TUTORIAL');
+ assert.equal(g.practice.index,0);assert.ok(!g.landscape);click(g,'EXIT');assert.equal(g.practice,null);
+});

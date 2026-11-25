@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {MatchRun,HOME_IDS,isHome,clone,distance} from '../src/engine.js';
+import {MatchRun,HOME_IDS,isHome,clone,distance,practiceRun,practicePassed} from '../src/engine.js';
 const make=()=>{const r=new MatchRun(71);r.start();return r;};
 function setBall(r,id,x,z){Object.assign(r.state.actors[id],{x,z});r.state.ballOwner=id;r.state.ball={x:x+.5,z:z-1,y:.6};r.intents=r.makeIntents();}
 test('losing the ball is a playable turnover, not a life loss',()=>{
@@ -82,4 +82,18 @@ test('a side-on slide reaches farther than a standing tackle',()=>{
  const r=dribbleFixture(3.8,14),o={kind:'tackle',actor:4,tackleAt:1,path:[]};
  assert.equal(r.preview({...o,tackle:'stand'}).tackleOutcome,'miss');
  assert.equal(r.preview({...o,tackle:'slide'}).type,'regain');
+});
+
+test('challenge preview reports exact separation, range and reason for a miss',()=>{
+ const r=dribbleFixture(12,12),o={kind:'tackle',actor:4,tackle:'stand',tackleAt:.5,path:[]};
+ const p=r.preview(o);assert.equal(p.tackleOutcome,'miss');assert.ok(p.challenge.distance>p.challenge.reach);assert.equal(p.challenge.reach,2.1);assert.match(p.detail,/Out of reach/);
+ const out=r.commit(o);assert.deepEqual(out.challenge,p.challenge);assert.equal(out.tackleOutcome,p.tackleOutcome);
+});
+test('practice drills use the same real simulation and fixed successful challenges',()=>{
+ for(const [i,time] of [[3,1],[4,1]]){
+  const r=practiceRun(i),p=r.tacklePointAt(time),target=i===4?{x:p.x+1.6,z:p.z+1}:p;
+  const order={kind:'tackle',actor:4,tackle:i===3?'stand':'slide',tackleAt:time,path:[target]};
+  const before=clone(r.state),preview=r.preview(order);assert.equal(preview.tackleOutcome,'won');assert.deepEqual(r.state,before);
+  const out=r.commit(order);assert.ok(practicePassed(i,out));assert.deepEqual(out.challenge,preview.challenge);
+ }
 });
