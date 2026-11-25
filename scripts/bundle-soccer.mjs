@@ -32,39 +32,6 @@ playerText=playerText.replace('function getPassReceiverPosition(teammate, carrie
         return {x: teammate.x * .75 + target.x * .25, y: teammate.y * .75 + target.y * .25};
     }`);
 playerText=playerText.replace('const forwardStep = Utils.scaleFieldX(inAttackingHalf ? 12.5 : 7.8125)', `const forwardStep = Utils.scaleFieldX(Settings.SUNDAY_ATTACK ? (inAttackingHalf ? 15 : 13) : (inAttackingHalf ? 12.5 : 7.8125))`);
-// A compact pitch has little room for blind inward dribbling. Score three
-// forward corridors against the opponents' current positions, using only
-// normal steering targets (no teleport, guaranteed evasion or RNG changes).
-const carryAnchor='    const margin = field.multiplier;\n    return {\n        x: Math.max(margin, Math.min(field.width - margin, targetX)),';
-const carryStart=playerText.indexOf('function computeDribbleTarget(player)');
-const carryEnd=playerText.indexOf('function getPassReceiverPosition',carryStart);
-if(carryStart<0||carryEnd<0)throw Error('Missing pinned dribble function');
-let carrySource=playerText.slice(carryStart,carryEnd);
-if(!carrySource.includes(carryAnchor))throw Error('Missing pinned carry target');
-carrySource=carrySource.replace(carryAnchor,`    if (Settings.SUNDAY_ZONES && Math.abs(player.x - (attacksRight ? field.width : 0)) > field.width * .33) {
-        const opponents = level.players.filter(o => o.team !== player.team && !o.isSentOff);
-        const step = field.width * .13;
-        const lane = field.height * .13;
-        let best = null, bestScore = -Infinity;
-        for (const offset of [0, -lane, lane]) {
-            const x = Math.max(field.multiplier, Math.min(field.width - field.multiplier, player.x + forwardSign * step));
-            const y = Math.max(field.multiplier, Math.min(field.height - field.multiplier, player.y + offset));
-            const dx = x - player.x, dy = y - player.y;
-            const length2 = dx * dx + dy * dy;
-            let clearance = field.width;
-            for (const o of opponents) {
-                const t = Math.max(.15, Math.min(1, ((o.x-player.x)*dx+(o.y-player.y)*dy)/Math.max(.001,length2)));
-                clearance = Math.min(clearance, Math.hypot(o.x-player.x-t*dx, o.y-player.y-t*dy));
-            }
-            const score = Math.min(clearance, field.width*.12) - Math.abs(offset)*.12 - Math.abs(y-goalY)*.035;
-            if (score > bestScore) { bestScore=score; best={x,y}; }
-        }
-        if (best) { targetX = best.x; targetY = best.y; }
-    }
-    const margin = field.multiplier;
-    return {
-        x: Math.max(margin, Math.min(field.width - margin, targetX)),`);
-playerText=playerText.slice(0,carryStart)+carrySource+playerText.slice(carryEnd);
 // Report actual contact outcomes, not AI intentions. The short settling
 // window is only for the new profile and only after a clean received pass.
 playerText=playerText.replace('const touch = applyFirstTouch(player, ball, { forceClean: ownPass });', `const incomingSpeed = Math.hypot(ball.vx || 0, ball.vy || 0);
