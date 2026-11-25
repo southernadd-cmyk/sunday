@@ -52,7 +52,7 @@ export function createMutations({sim,field,dt,event,resetPlayer}){
   return true;
  }
  function enterHole(h){if(drop)return;clearBall();sim.ball.x=h.x;sim.ball.y=h.y;drop={...h,until:tick+Math.round(.65/dt)};metrics.ballDrops++;event('BALL SWALLOWED!',null,'mutation');}
- function fall(p,h){if(sim.ball.owner===p)enterHole(h);fallen.set(p,{x:h.x,y:h.y,until:tick+Math.round(2/dt)});p.isSentOff=true;zero(p);metrics.falls++;event(p.team+' '+p.role+' FELL IN!',p.team,'mutation');}
+ function fall(p,h){if(sim.ball.owner===p)enterHole(h);const team=sim.getTeam?.(p.team);if(team?.receivingPlayer===p)team.receivingPlayer=null;resetPlayer(p);fallen.set(p,{x:h.x,y:h.y,until:tick+Math.round(2/dt)});p.isSentOff=true;zero(p);metrics.falls++;event(p.team+' '+p.role+' FELL IN!',p.team,'mutation');}
  function push(p,o,r){const dx=p.x-o.x,dy=p.y-o.y,d=Math.hypot(dx,dy);if(d>=r)return false;const nx=d>.001?dx/d:0,ny=d>.001?dy/d:1;p.x=o.x+nx*r;p.y=o.y+ny*r;return true;}
  function collideBall(h,prev){
   const b=sim.ball;if(b.z>1.5||b.owner||drop)return;
@@ -68,11 +68,11 @@ export function createMutations({sim,field,dt,event,resetPlayer}){
  function after(prev){
   if(sim.matchState!=='play'||sim.setPieceType||!active.size)return;
   const b=sim.ball,{lo,hi}=limits(),giant=active.get('giant')?.player;
-  if(giant&&!giant.isSentOff)for(const p of outfield())if(p!==giant&&push(p,giant,1.7)){zero(p);metrics.giantContacts++;}
+  if(giant&&!giant.isSentOff)for(const p of outfield())if(p!==giant&&push(p,giant,1.7)){p.x=clamp(p.x,.25,field.width-.25);p.y=clamp(p.y,lo+.25,hi-.25);zero(p);metrics.giantContacts++;}
   for(const h of geometry()){
    for(const p of outfield()){
     if(h.kind==='hole'&&dist(p,h)<h.r-.3){fall(p,h);continue;}
-    if(h.kind==='bumper'&&push(p,h,h.r+.35*size(p))){zero(p);if(b.owner===p){b.owner=null;b.x=p.x;b.y=p.y;zero(b);}}
+    if(h.kind==='bumper'&&push(p,h,h.r+.35*size(p))){zero(p);if(b.owner===p){clearBall();b.x=p.x;b.y=p.y;}}
    }
    if(!drop)collideBall(h,prev);
   }
@@ -82,5 +82,5 @@ export function createMutations({sim,field,dt,event,resetPlayer}){
   }
  }
  function snapshot(project){return {active:[...active.values()].map(e=>({id:e.id,player:e.player?sim.players.indexOf(e.player):null,seconds:Math.max(0,(e.until-tick)*dt)})),used:[...used],geometry:geometry().map(h=>({...project(h),radius:h.r/field.height*68,depthRadius:h.r/field.width*94,kind:h.kind})),squeeze:active.has('squeeze'),ballHidden:!!drop,fallen:[...fallen.keys()].map(p=>sim.players.indexOf(p)),metrics:{...metrics}};}
- return {activate,before,after,snapshot,metrics,limits,active,fallen,used,shot(p){if(p?.sundayMutationShot>1)metrics.cannonShots++;}};
+ return {activate,before,after,snapshot,metrics,limits,active,fallen,used,recoverAll(){for(const [p,f] of fallen)recover(p,f);},shot(p){if(p?.sundayMutationShot>1)metrics.cannonShots++;}};
 }
