@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,existsSync} from 'node:fs';
-import {Sunday} from '../construct/scripts/controller.js';
+import {Sunday,heading,advanceStride,interpolatePose} from '../construct/scripts/controller.js';
 
 const json=p=>JSON.parse(readFileSync(new URL('../construct/'+p,import.meta.url)));
 
@@ -63,7 +63,7 @@ test('native pitch stays vertical, scrolls, and inverse coordinates round trip',
  for(const opts of [{},{width:960,height:2000,left:130,top:-600,cssScale:.375},{width:960,height:540,cssScale:.65}]){
   const g=new Sunday(runtime(opts));await start(g);inBounds(g);assert.equal(g.pitch.angle,0);
   const p=g.point({x:10,z:12}),back=g.ground(p.x,p.y);assert.ok(Math.abs(back.x-10)<1e-6&&Math.abs(back.z-12)<1e-6);
-  const old=g.camera;g.auto.match.ball.z=40;g.drawAuto(1);assert.ok(g.camera>=old);assert.equal(g.actors.filter(a=>a.isVisible).length,10);
+  const old=g.camera;g.auto.match.ball.z=40;g.captureMotion(true);g.drawAuto(1);assert.ok(g.camera>=old);assert.equal(g.actors.filter(a=>a.isVisible).length,10);
  }
 });
 test('drag a token directly onto a player or the pitch; invalid drops cost nothing',async()=>{
@@ -71,7 +71,7 @@ test('drag a token directly onto a player or the pitch; invalid drops cost nothi
   const g=new Sunday(runtime(opts));await start(g);openPlay(g);
   const m=g.auto.match,p=m.actors.find(a=>a.side===0&&a.role==='CF'&&a.visible);g.camera=p.z;g.drawAuto(0);
   const e=grab(g,'giant'),t=m.time;g.advanceAuto(1);assert.equal(m.time,t);g.pointerUp(e);assert.equal(g.auto.armed,null);assert.equal(m.mutations.used.length,0);
-  grab(g,'giant');const a=g.point(p);release(g,a.x,a.y);assert.equal(g.auto.armed,null);assert.ok(m.mutations.used.includes('giant'));assert.equal(m.actors.find(x=>x.id===p.id).size,3);
+  grab(g,'giant');const a=g.point(g.visualActors.find(v=>v.id===p.id));release(g,a.x,a.y);assert.equal(g.auto.armed,null);assert.ok(m.mutations.used.includes('giant'));assert.equal(m.actors.find(x=>x.id===p.id).size,3);
   grab(g,'squeeze');release(g,g.cx,g.layout.play.y+g.layout.play.h/2);assert.ok(m.mutations.squeeze);assert.ok(m.mutations.active.length===2);
   grab(g,'sinkhole');release(g,g.cx,g.v.top);assert.ok(!m.mutations.used.includes('sinkhole'));assert.equal(g.auto.armed,null);
   grab(g,'sinkhole');g.runtime.handlers.get('pointercancel')({pointerId:1});assert.equal(g.auto.armed,null);assert.equal(g.drag,null);
@@ -90,4 +90,39 @@ test('half-time and full-time use screen taps, not menu buttons',async()=>{
 test('cancelled asynchronous native match cannot overwrite a newer match',async()=>{
  const g=new Sunday(runtime());const first=g.startAuto(12345),old=g.auto;g.exitAuto();const second=g.startAuto(728),current=g.auto;await first;await second;
  assert.notEqual(old,current);assert.equal(g.auto,current);assert.equal(g.auto.seed,728);assert.equal(g.auto.phase,'match');
+});
+
+test('eight headings, stationary pose, distance-driven stride and slide frame',()=>{
+ const vectors=[[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
+ for(let i=0;i<8;i++){
+  const [dx,dz]=vectors[i];assert.equal(heading(dx,dz),i);
+  const old={x:0,z:0,side:0},moving={...old,x:dx,z:dz};
+  const p=advanceStride(null,moving,old);assert.equal(p.dir,i);assert.ok(p.frame>=i*6+1&&p.frame<=i*6+4);
+  assert.equal(advanceStride(p,moving,moving).frame,i*6);
+  assert.equal(advanceStride(p,{...moving,sliding:true},moving).frame,i*6+5);
+ }
+});
+test('render interpolation is continuous, clamps extrapolation and snaps teleports and hidden actors',()=>{
+ const a={x:0,z:0,y:0,visible:true},b={x:3,z:6,y:2,visible:true};
+ assert.deepEqual(interpolatePose(a,b,.5),{x:1.5,z:3,y:1,visible:true});
+ assert.deepEqual(interpolatePose(a,b,2),b);assert.deepEqual(interpolatePose(a,b,-1),a);
+ assert.deepEqual(interpolatePose(a,{...b,z:50},.5),{...b,z:50});
+ assert.deepEqual(interpolatePose(a,{...b,visible:false},.5),{...b,visible:false});
+});
+test('native directional atlas contains all 192 distinct frame records with valid bounds',()=>{
+ const project=json('objectTypes/Footballer.json'),data=JSON.parse(readFileSync(new URL('../public/construct/data.json',import.meta.url)));
+ const native=data.project[3].find(o=>o[0]==='Footballer'),atlas=readFileSync(new URL('../public/construct/images/sunday-directional.png',import.meta.url)),width=atlas.readUInt32BE(16),height=atlas.readUInt32BE(20),slots=new Set(),ids=new Set();
+ assert.equal(project.animations.items.length,4);
+ for(const a of project.animations.items){
+  assert.equal(a.frames.length,48);const frames=native[7].find(n=>n[0]===a.name)[7];assert.equal(frames.length,48);
+  for(let i=0;i<48;i++){const f=frames[i],p=a.frames[i];assert.equal(f[0],'images/sunday-directional.png');assert.equal(f[1],atlas.length);assert.ok(f[2]>=0&&f[3]>=0&&f[2]+16<=width&&f[3]+16<=height);const key=f[2]+':'+f[3];assert.ok(!slots.has(key));slots.add(key);assert.ok(!ids.has(p.imageSpriteId));ids.add(p.imageSpriteId);}
+ }
+ assert.equal(slots.size,192);
+});
+test('fractional visual movement leaves the authoritative simulation untouched',async()=>{
+ const g=new Sunday(runtime());await start(g);openPlay(g);
+ const s=g.auto,m=s.match,initial=m.time;
+ s.acc=0;g.advanceAuto(.05);const authoritative=m.actors.map(a=>({...a}));const prev=g.visualActors.map(a=>({...a}));
+ g.advanceAuto(.025);assert.ok(Math.abs(m.time-initial-.05)<1e-6);assert.deepEqual(m.actors,authoritative);
+ const next=g.visualActors;for(let i=0;i<next.length;i++){assert.ok(Math.abs(next[i].x-(prev[i].x+authoritative[i].x)/2)<1e-6);assert.ok(Math.abs(next[i].z-(prev[i].z+authoritative[i].z)/2)<1e-6);}
 });
