@@ -267,7 +267,7 @@ export class Sunday{
     this.label(name,p.x-25*u,p.y+3*u,50*u,14*u,10,active?C.yellow:C.cream,'center');
    }
   }
-  if(this.targetMode==='shot'&&this.run.buffs.chip)this.button(this.chip?'DINK ON':'DINK',this.v.right-102*u,this.landscape?this.v.top+324*u:this.v.top+64*u,90*u,28*u,()=>this.dink(),true,this.chip);
+  if(this.targetMode==='shot'&&this.run.buffs.chip)this.button(this.chip?'DINK ON':'DINK',this.v.right-102*u,this.landscape?this.v.top+384*u:this.v.top+64*u,90*u,28*u,()=>this.dink(),true,this.chip);
   if(this.targetMode==='shot')for(const x of [-5.8,5.8]){const p=this.point({x,z:-47});this.button(this.landscape?(x<0?'HIGH':'LOW'):(x<0?'LEFT':'RIGHT'),p.x-(this.landscape?0:23*u),p.y-22*u,46*u,22*u,()=>this.aim(x));}
  }
  panel(width,height){const u=this.u,v=this.v,w=Math.min(width*u,v.width-26*u),h=Math.min(height*u,v.height-170*u),x=v.left+(v.width-w)/2,y=v.top+(v.height-h)/2;this.rect(x,y,w,h);return {x,y,w,h,u};}
