@@ -1,5 +1,5 @@
 // Native Construct 3 presentation and input. The shared engine alone decides outcomes.
-import {MatchRun, MATCH_GEAR as GEAR, HOME_IDS, isHome, ACTION_TIMES, along, GOAL, PASS_RANGE, STRIDE, ACTORS, readProfile, saveProfile, purchase, UPGRADES, distance, route, clamp} from './engine.js';
+import {PRACTICE, practiceRun, practicePassed, MatchRun, MATCH_GEAR as GEAR, HOME_IDS, isHome, ACTION_TIMES, along, GOAL, PASS_RANGE, STRIDE, ACTORS, readProfile, saveProfile, purchase, UPGRADES, distance, route, clamp} from './engine.js';
 
 const C={navy:[.09,.15,.25,.96],yellow:[1,.88,.35,1],cream:[.96,.96,.82,1],cyan:[.64,.9,.87,1],orange:[1,.66,.36,.8],red:[1,.39,.3,1],clear:[0,0,0,0]};
 const rgb=c=>c.slice(0,3);
@@ -23,8 +23,26 @@ export class Sunday{
   runtime.addEventListener('keydown',e=>this.key(e));runtime.addEventListener('resume',()=>{if(this.anim)this.anim.last=performance.now();});
  }
  newRun(intro=false){
-  this.run=new MatchRun(randomSeed(),this.profile);this.run.start();this.selected=this.run.selection();this.intro=intro;this.modal=null;this.busy=false;this.anim=null;this.chip=false;this.clear(false);
+  this.practice=null;this.practiceReturn=null;this.run=new MatchRun(randomSeed(),this.profile);this.run.start();this.selected=this.run.selection();this.intro=intro;this.modal=null;this.busy=false;this.anim=null;this.chip=false;this.clear(false);
   if(this.v){this.updateActors();this.refresh();}
+ }
+ startPractice(){
+  if(this.busy)return;
+  if(!this.practice)this.practiceReturn={run:this.run,selected:this.selected};
+  this.loadDrill(0);
+ }
+ loadDrill(index){
+  this.practice={index,outcome:null};this.run=practiceRun(index);this.selected=PRACTICE[index].actor;
+  this.intro=false;this.modal=null;this.busy=false;this.anim=null;this.chip=false;this.clear(false);this.resize();
+ }
+ exitPractice(){
+  if(!this.practice)return;
+  const saved=this.practiceReturn;this.practice=null;this.practiceReturn=null;this.run=saved.run;this.selected=saved.selected;
+  this.intro=false;this.modal=null;this.busy=false;this.anim=null;this.clear(false);this.resize();
+ }
+ practiceResult(result){
+  const index=this.practice.index,passed=practicePassed(index,result);
+  this.practice.outcome={passed,detail:result.detail||'Try the instruction again.'};this.refresh();
  }
  resize(){
   this.v=this.field.getViewport();const a=this.field.layerToCssPx(this.v.left,this.v.top),b=this.field.layerToCssPx(this.v.left+1,this.v.top);
@@ -33,12 +51,12 @@ export class Sunday{
   this.landscape=W/u>=740&&W/H>=1.25;
   const fieldWidth=W-(this.landscape?258*u:0);
   this.cx=L+fieldWidth/2;
-  this.scale=Math.max(.1,this.landscape?Math.min((fieldWidth-16*u)/110,(H-72*u)/88):Math.min((W-8*u)/88,(H-278*u)/110));
+  this.scale=Math.max(.1,this.landscape?Math.min((fieldWidth-16*u)/110,(H-72*u)/88):Math.min((W-8*u)/88,(H-(this.practice?310:278)*u)/110));
   if(this.landscape){
    this.pitchRight=this.cx+55*this.scale;this.pitchTop=T+62*u+(H-72*u-88*this.scale)/2;
    Object.assign(this.pitch,{x:this.pitchRight,y:this.pitchTop,width:88*this.scale,height:110*this.scale,angle:Math.PI/2});
   }else{
-   this.top=T+62*u+6*this.scale+(H-278*u-110*this.scale)/2;
+   this.top=T+62*u+6*this.scale+(H-(this.practice?310:278)*u-110*this.scale)/2;
    Object.assign(this.pitch,{x:this.cx-44*this.scale,y:this.top-6*this.scale,width:88*this.scale,height:110*this.scale,angle:0});
   }
   for(const canvas of [this.plans,this.canvas]){canvas.x=this.v.left;canvas.y=this.v.top;canvas.width=this.v.width;canvas.height=this.v.height;}
@@ -47,7 +65,7 @@ export class Sunday{
  }
  point(p){return this.landscape?{x:this.pitchRight-(p.z+55)*this.scale,y:this.pitchTop+(p.x+44)*this.scale}:{x:this.cx+p.x*this.scale,y:this.top+(p.z+49)*this.scale};}
  ground(x,y){return this.landscape?{x:(y-this.pitchTop)/this.scale-44,z:(this.pitchRight-x)/this.scale-55}:{x:(x-this.cx)/this.scale,z:(y-this.top)/this.scale-49};}
- planning(){return !this.intro&&!this.modal&&!this.busy&&this.run.phase==='planning';}
+ planning(){return !this.intro&&!this.modal&&!this.busy&&!this.practice?.outcome&&this.run.phase==='planning';}
  clear(refresh=true){this.order=null;this.preview=null;this.burst=false;this.support={};this.targetMode=null;if(refresh)this.refresh();}
   previewOrder(order){this.order={...order,actor:this.selected,support:{...this.support}};this.preview=this.run.preview(this.order);}
   select(id){
@@ -65,7 +83,7 @@ export class Sunday{
    if(this.selected!==this.run.state.ballOwner)this.select(this.run.state.ballOwner);
    this.target(mode);
   }
- defend(cover=false){if(!this.planning()||!this.run.defending)return;const p=this.run.defensivePoint(this.selected,cover);if(p){this.targetMode=null;this.previewOrder({kind:'run',path:[p],burst:this.burst});this.refresh();}}
+ defend(cover=false){if(!this.planning()||!this.run.defending)return;const p=this.run.defensivePoint(this.selected,cover);if(p){this.targetMode=null;this.previewOrder({kind:'run',path:[p],burst:this.burst,autoPress:true});this.refresh();}}
  hold(){if(!this.planning())return;this.targetMode=null;this.previewOrder({kind:'hold',path:[]});this.refresh();}
  planPath(points){
   if(!this.planning())return;
@@ -89,16 +107,23 @@ export class Sunday{
   const path=route(a,raw,this.run.runRange);
   return ACTION_TIMES.map(time=>({time,p:along(path,this.run.runRange*time/2)}));
  }
- tackle(kind,time=this.order?.tackleAt??1.5){
-  if(!this.planning()||!this.run.defending)return;
-  const prior=this.order,manual=prior?.kind==='run'&&prior.path?.length||prior?.kind==='tackle'&&!prior.autoTackle;
+ challengeOrder(kind,time){
+  const prior=this.order,manual=(prior?.kind==='run'&&prior.path?.length&&!prior.autoPress)||(prior?.kind==='tackle'&&!prior.autoTackle);
   const p=this.run.tacklePointAt(time);
-  this.targetMode=null;this.previewOrder({kind:'tackle',tackle:kind,tackleAt:time,path:manual?prior.path:p?[p]:[],burst:this.burst,autoTackle:!manual});this.refresh();
+  const target=p&&kind==='slide'?{x:p.x+(this.run.state.actors[this.selected].x>=p.x?1.6:-1.6),z:p.z+1}:p;
+  return {kind:'tackle',tackle:kind,tackleAt:time,path:manual?prior.path:target?[target]:[],burst:this.burst,autoTackle:!manual,actor:this.selected,support:{...this.support}};
  }
- tackleTiming(time){
-  if(this.order?.kind!=='tackle')return;
-  this.tackle(this.order.tackle,time);
+ challengeChoices(kind){
+  return ACTION_TIMES.map(time=>{const order=this.challengeOrder(kind,time);return {time,order,preview:this.run.preview(order)};});
  }
+ tackle(kind,time){
+  if(!this.planning()||!this.run.defending)return;
+  const choices=this.challengeChoices(kind);
+  const best=time==null?(choices.find(x=>x.preview.tackleOutcome==='won')||choices.find(x=>x.preview.type==='regain')||choices.filter(x=>x.preview.valid&&x.preview.tackleOutcome!=='foul').sort((a,b)=>(a.preview.challenge?.distance??99)-(b.preview.challenge?.distance??99))[0]||choices[2]):choices.find(x=>x.time===time);
+  if(!best)return;
+  this.targetMode=null;this.previewOrder(best.order);this.refresh();
+ }
+ tackleTiming(time){if(this.order?.kind==='tackle')this.tackle(this.order.tackle,time);}
  oneTwo(ally=1){
   if(!this.planning())return;
   if(this.order?.kind==='one-two'&&this.order.ally===ally){this.clear();return;}
@@ -131,7 +156,7 @@ export class Sunday{
   if(!this.anim)return;
   const now=performance.now();this.anim.elapsed+=(now-this.anim.last)/1000;this.anim.last=now;
   const progress=Math.min(1,this.anim.elapsed/this.anim.duration);this.drawFrame(this.anim.result,progress);
-  if(progress>=1){if(this.run.state.ballOwner!==this.run.before.state.ballOwner)this.selected=this.run.selection();this.anim=null;this.busy=false;this.updateActors();this.refresh();}
+  if(progress>=1){const result=this.anim.result;if(this.run.state.ballOwner!==this.run.before.state.ballOwner)this.selected=this.run.selection();this.anim=null;this.busy=false;this.updateActors();if(this.practice)this.practiceResult(result);else this.refresh();}
  }
  drawFrame(result,progress){
   const f=progress*(result.count-1),a=Math.floor(f),b=Math.min(result.count-1,a+1),mix=f-a;
@@ -151,10 +176,10 @@ export class Sunday{
   for(const a of this.run.state.actors)this.placeActor(a.id,a.x,a.z);
   for(const a of [...this.actors].sort((a,b)=>a.y-b.y))a.moveToTop();this.placeBall(this.run.state.ball);
  }
- rewind(){if(this.busy||this.intro||this.modal)return;if(this.run.rewind()){this.selected=this.run.selection();this.clear(false);this.updateActors();this.refresh();}}
+ rewind(){if(this.busy||this.intro||this.modal)return;if(this.practice){this.loadDrill(this.practice.index);return;}if(this.run.rewind()){this.selected=this.run.selection();this.clear(false);this.updateActors();this.refresh();}}
  next(){if(this.busy)return;if(this.run.continue()){this.selected=this.run.selection();this.clear(false);this.updateActors();this.refresh();}}
  collect(id){if(this.run.collect(id)){this.selected=this.run.selection();this.clear(false);this.updateActors();this.refresh();}}
- bank(){if(this.run.claim(this.profile))saveProfile(this.storage,this.profile);}
+ bank(){if(this.practice)return;if(this.run.claim(this.profile))saveProfile(this.storage,this.profile);}
 
  // Pool native Text instances. No DOM overlays or third-party UI renderer.
  label(text,x,y,width,height,size=14,color=C.cream,align='left'){
@@ -177,14 +202,15 @@ export class Sunday{
   const score=view.scoreFor??0;
   this.rect(L+12*u,T+12*u,W-24*u,44*u,C.navy,null);
   const available=W-118*u;
-  this.label(`A&C ${score}–${view.scoreAgainst??0} ${this.run.fixture.short}`,L+22*u,T+17*u,available,18*u,14,C.cream);
-  this.label(`SUN ${this.run.fixtureIndex+1}/4  ·  ${view.beats*2}s  ·  LEGS ${legs}/3  ·  ${this.busy?'LIVE':this.run.defending?'DEFEND':'ATTACK'}`,L+22*u,T+36*u,available,16*u,11,C.yellow);
-  this.button('SHED',R-94*u,T+18*u,50*u,30*u,()=>{this.modal='shed';this.refresh();},!this.busy);
+  this.label(this.practice?'TRAINING · '+PRACTICE[this.practice.index].title:`A&C ${score}–${view.scoreAgainst??0} ${this.run.fixture.short}`,L+22*u,T+17*u,available,18*u,14,C.cream);
+  this.label(this.practice?'NO PENALTIES · '+(this.busy?'LIVE':'PRACTICE'): `SUN ${this.run.fixtureIndex+1}/4  ·  ${view.beats*2}s  ·  LEGS ${legs}/3  ·  ${this.busy?'LIVE':this.run.defending?'DEFEND':'ATTACK'}`,L+22*u,T+36*u,available,16*u,11,C.yellow);
+  this.button(this.practice?'EXIT':'SHED',R-94*u,T+18*u,50*u,30*u,()=>{if(this.practice)this.exitPractice();else{this.modal='shed';this.refresh();}},!this.busy);
   this.button('?',R-38*u,T+18*u,24*u,30*u,()=>{this.modal='help';this.refresh();},!this.busy);
   if(this.planning()){this.drawPlans();this.drawTargets();this.orders();}
   else if(!this.intro&&!this.modal&&!this.busy&&this.run.phase==='pickup')this.pickupUi();
   if(this.busy)this.label('BALL IN PLAY',this.landscape?R-250*u:L+W*.25,this.landscape?T+82*u:B-110*u,this.landscape?238*u:W*.5,25*u,14,C.cream,'center');
-  if(this.intro)this.introUi();else if(!this.busy&&['goal','setback','over','champion'].includes(this.run.phase))this.resultUi();
+  if(this.intro)this.introUi();else if(this.practice?.outcome&&!this.busy)this.practiceOutcomeUi();else if(!this.practice&&!this.busy&&['goal','setback','over','champion'].includes(this.run.phase))this.resultUi();
+  if(this.practice&&!this.practice.outcome&&!this.busy&&!this.modal)this.practiceHint();
   if(this.modal)this.modalUi();
   for(let i=this.labelCount;i<this.labels.length;i++)this.labels[i].isVisible=false;
  }
@@ -224,14 +250,15 @@ export class Sunday{
   const msg=pr?.valid?(pr.type==='regain'||pr.tackleOutcome||pr.type==='foul'?pr.detail:pr.type==='conceded'?'Goal predicted. Try a block or another player.':'Plan set. '+th.detail):pr?.error||(this.run.state.freeKick?'Free kick. Intercept the pass or block the shot.':this.run.message+' '+th.detail);
   this.rect(x,y,pw,wide?308*u:198*u,C.navy,null);
   this.label(title,x+10*u,y+8*u,inner,wide?40*u:20*u,14,C.orange);
-  this.label(msg,x+10*u,y+(wide?50:28)*u,inner,wide?46*u:32*u,12,pr?.type==='regain'?C.cyan:pr?.type==='foul'?C.red:C.cream);
+  const ch=pr?.challenge,check=ch?(ch.protected?'BALL IN FLIGHT':pr.tackleOutcome==='foul'?'FOUL · FROM BEHIND':(pr.tackleOutcome==='won'?'WIN':'MISS')+' · '+ch.distance.toFixed(1)+'m / '+ch.reach.toFixed(1)+'m reach'):msg;
+  this.label(check,x+10*u,y+(wide?50:28)*u,inner,wide?46*u:32*u,12,pr?.type==='regain'?C.cyan:pr?.type==='foul'||pr?.tackleOutcome==='miss'?C.red:C.cream);
   this.button('PRESS',x+10*u,first,w,bh,()=>this.defend(false),true,this.order?.kind==='run');
   this.button('COVER',x+10*u+w+6*u,first,w,bh,()=>this.defend(true));
   this.button('SPRINT '+this.run.state.bursts,x+10*u+2*(w+6*u),first,w,bh,()=>this.sprint(),this.run.state.bursts>0,this.burst);
   this.button('STAND',x+10*u,second,w,bh,()=>this.tackle('stand'),a.id!==15&&!recovery,challenge&&this.order.tackle==='stand');
   this.button('SLIDE',x+10*u+w+6*u,second,w,bh,()=>this.tackle('slide'),a.id!==15&&!recovery,challenge&&this.order.tackle==='slide');
   this.button('HOLD',x+10*u+2*(w+6*u),second,w,bh,()=>this.hold());
-  if(challenge){const tw=(inner-9*u)/4;ACTION_TIMES.forEach((time,i)=>this.button(time.toFixed(1)+'s',x+10*u+i*(tw+3*u),third,tw,bh,()=>this.tackleTiming(time),true,time===this.order.tackleAt));}
+  if(challenge){const tw=(inner-9*u)/4;this.challengeChoices(this.order.tackle).forEach(({time,preview},i)=>{const x0=x+10*u+i*(tw+3*u);this.button(time.toFixed(1)+'s',x0,third,tw,bh,()=>this.tackleTiming(time),true,time===this.order.tackleAt);const tone=preview.tackleOutcome==='won'?C.cyan:preview.tackleOutcome==='foul'?C.red:preview.type==='regain'?C.cyan:C.orange;this.rect(x0+3*u,third+bh-4*u,tw-6*u,2*u,tone,null);});}
   else this.label('Stand: safe reach. Slide: longer, foul risk.',x+10*u,third+3*u,inner,bh,11,C.cyan);
   this.button('REWIND',x+10*u,fourth,w,bh,()=>this.rewind(),!!this.run.before&&this.run.rewinds>0);
   this.button('PLAY 2s',x+10*u+w+6*u,fourth,2*w+6*u,bh,()=>this.play(),!!pr?.valid,false,true);
@@ -252,7 +279,7 @@ export class Sunday{
   }
   for(const mark of this.receptionMarkers()){const q=local(mark.p),chosen=this.order.receiveAt===mark.time;this.plans.outlineEllipse(q.x,q.y,(chosen?7:4)*u,(chosen?7:4)*u,chosen?C.yellow:C.cyan,1.5*u,false);}
   if(this.preview?.delivery){const q=local(this.preview.delivery.target);this.plans.outlineEllipse(q.x,q.y,7*u,7*u,C.yellow,2*u,false);}
-  if(this.order?.kind==='tackle'){const tp=this.run.tacklePointAt(this.order.tackleAt);if(tp){const q=local(tp);this.plans.outlineEllipse(q.x,q.y,(this.order.tackle==='slide'?3.7:2.1)*this.scale,(this.order.tackle==='slide'?3.7:2.1)*this.scale,C.yellow,1.5*u,false);}}
+  if(this.order?.kind==='tackle'){const ch=this.preview?.challenge;if(ch){const q=local(ch.defender),b=local(ch.ball),tone=this.preview.tackleOutcome==='won'?C.cyan:this.preview.tackleOutcome==='foul'?C.red:C.orange,r=ch.reach*this.scale;this.plans.outlineEllipse(q.x,q.y,r*2,r*2,tone,1.8*u,false);this.plans.outlineEllipse(b.x,b.y,5*u,5*u,C.yellow,1.5*u,false);this.plans.lineDashed(q.x,q.y,b.x,b.y,tone,1.5*u,3*u);}else{const tp=this.run.tacklePointAt(this.order.tackleAt);if(tp){const q=local(tp);this.plans.outlineEllipse(q.x,q.y,6*u,6*u,C.yellow,1.5*u,false);}}}
   if(this.preview?.point){const p=local(this.preview.point),r=5*u;this.plans.line(p.x-r,p.y-r,p.x+r,p.y+r,C.red,2*u);this.plans.line(p.x-r,p.y+r,p.x+r,p.y-r,C.red,2*u);}
  }
  drawTargets(){
@@ -272,10 +299,24 @@ export class Sunday{
  }
  panel(width,height){const u=this.u,v=this.v,w=Math.min(width*u,v.width-26*u),h=Math.min(height*u,v.height-170*u),x=v.left+(v.width-w)/2,y=v.top+(v.height-h)/2;this.rect(x,y,w,h);return {x,y,w,h,u};}
  introUi(){
-  const {x,y,w,h,u}=this.panel(465,310);
+  const {x,y,w,h,u}=this.panel(465,295);
   this.label('THE NEXT TWO SECONDS.',x+20*u,y+20*u,w-40*u,65*u,27,C.yellow);
-  this.label('Win four short cup matches.\nTap a player, then grass to plan a run.\nQueue runs for multiple players.\nPASS / 1–2 with the ball.\nPRESS / COVER / HOLD without it.\nScore, defend, then play the final whistle.',x+20*u,y+100*u,w-40*u,h-150*u,14);
-  this.button('STEP ONTO THE PITCH',x+20*u,y+h-48*u,w-40*u,32*u,()=>{this.intro=false;this.refresh();},true,false,true);
+  this.label('Learn the controls on the pitch in five short drills.\nMove, pass into space, shoot and tackle.\nNo lives lost, no time pressure.',x+20*u,y+85*u,w-40*u,80*u,14);
+  this.button('PLAY TUTORIAL',x+20*u,y+h-88*u,w-40*u,34*u,()=>this.startPractice(),true,false,true);
+  this.button('STEP ONTO THE PITCH',x+20*u,y+h-48*u,w-40*u,32*u,()=>{this.intro=false;this.refresh();});
+ }
+ practiceHint(){
+  const {left:L,top:T,right:R,bottom:B,width:W}=this.v,u=this.u;
+  const x=this.landscape?R-250*u:L+12*u,y=this.landscape?T+380*u:B-239*u,w=this.landscape?238*u:W-24*u,h=this.landscape?68*u:27*u;
+  this.rect(x,y,w,h,C.navy,null);this.label(PRACTICE[this.practice.index].hint,x+5*u,y+2*u,w-10*u,h-3*u,this.landscape?12:10,C.cream);
+ }
+ practiceOutcomeUi(){
+  this.buttons=[];
+  const {x,y,w,h,u}=this.panel(465,245),o=this.practice.outcome,i=this.practice.index;
+  this.label(o.passed?(i===PRACTICE.length-1?'TRAINING COMPLETE':'WELL PLAYED!'):'HAVE ANOTHER GO',x+16*u,y+18*u,w-32*u,40*u,24,o.passed?C.yellow:C.orange);
+  this.label(o.passed?'That worked. '+(i===PRACTICE.length-1?'Take it into the cup.':'Ready for the next drill?'):o.detail+'\n'+PRACTICE[i].hint,x+16*u,y+65*u,w-32*u,h-153*u,14);
+  this.button(o.passed?(i===PRACTICE.length-1?'PLAY THE CUP':'NEXT DRILL'):'RETRY DRILL',x+16*u,y+h-82*u,w-32*u,32*u,()=>o.passed?(i===PRACTICE.length-1?this.exitPractice():this.loadDrill(i+1)):this.loadDrill(i),true,false,true);
+  this.button(o.passed?'REPEAT DRILL':'EXIT TUTORIAL',x+16*u,y+h-43*u,w-32*u,28*u,()=>o.passed?this.loadDrill(i):this.exitPractice());
  }
  resultUi(){
   if(['over','champion'].includes(this.run.phase))this.bank();
@@ -305,6 +346,7 @@ export class Sunday{
    this.label(`CLUB KITTY: £${this.profile.kitty}\nUpgrades apply to the next run.`,x+20*u,y+67*u,w-40*u,52*u,14);
    Object.entries(UPGRADES).forEach(([id,a],i)=>{this.label(`${a.name}\n${a.text}`,x+20*u,y+(135+i*70)*u,w-135*u,56*u,13);this.button(this.profile[id]>=a.max?'SORTED':`£${a.price}`,x+w-100*u,y+(139+i*70)*u,80*u,34*u,()=>{if(purchase(this.profile,id)){saveProfile(this.storage,this.profile);this.refresh();}},this.profile[id]<a.max&&this.profile.kitty>=a.price);});
   }
+  if(help&&!this.practice)this.button('PLAY TUTORIAL',x+20*u,y+h-78*u,w-40*u,29*u,()=>this.startPractice(),true,false,true);
   this.button('BACK TO THE PITCH',x+20*u,y+h-45*u,w-40*u,30*u,()=>{this.modal=null;this.refresh();});
  }
  pointerDown(e){
@@ -344,8 +386,9 @@ export class Sunday{
   if(e.repeat)return;const k=e.key.toLowerCase();
   if(this.modal){if(k==='escape')this.modal=null;this.refresh();return;}
   if(this.busy)return;
-  if(k==='enter'){if(this.intro){this.intro=false;this.refresh();}else if(['goal','setback'].includes(this.run.phase))this.next();else if(['champion','over'].includes(this.run.phase))this.newRun();return;}
+  if(k==='enter'){if(this.practice?.outcome){const {index,outcome}=this.practice;if(!outcome.passed)this.loadDrill(index);else if(index===PRACTICE.length-1)this.exitPractice();else this.loadDrill(index+1);}else if(this.intro){this.startPractice();}else if(['goal','setback'].includes(this.run.phase))this.next();else if(['champion','over'].includes(this.run.phase))this.newRun();return;}
   if(this.intro)return;
+  if(this.practice?.outcome){if(k==='escape')this.exitPractice();return;}
   if(k==='r'){this.rewind();return;}
   if(this.run.phase==='pickup'&&['1','2','3'].includes(k)){this.collect(this.run.offers[Number(k)-1]);return;}
   if(!this.planning())return;
