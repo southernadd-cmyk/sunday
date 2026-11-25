@@ -55,3 +55,7 @@ The title screen offers PLAY TUTORIAL or direct entry. Five interactive drills t
 ## Main menu
 
 SUNDAY opens on a dedicated title screen: NEW CAREER starts a fresh cup run, TUTORIALS opens the training ground (full sequence or individual drills). MENU during play allows resuming the current in-session career; starting another requires confirmation. Training preserves the active career and its planned orders, and returns to the tutorial selection or the live career depending on entry point. Existing banked club upgrades are retained. Resume is session-only; this change does not add saved career persistence across reloads.
+
+## Aiming shots
+
+SHOOT now highlights the full goal mouth. Tap anywhere on the goal line to aim, or use NEAR, CENTRE and FAR in the command panel. Near and far refer to the post relative to the ball carrier, not screen orientation; the selected target has a crosshair and the path previews interceptions/saves. Tap a different point to adjust the shot before PLAY 2s. Keyboard 1/2/3 select near/far/centre. There is no independent shot-height control; the learned DINK remains a separate chip option.

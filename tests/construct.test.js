@@ -79,7 +79,7 @@ test('native hit regions and pooled labels stay finite in a portrait viewport wi
  const range=clone(g.run.state);click(g,'PASS');tapPlayer(g,1);assert.equal(g.order.kind,'pass');
  assert.deepEqual(g.run.state,range);assert.equal(g.narrow,true);
  for(const b of g.buttons){assert.ok([b.x,b.y,b.w,b.h].every(Number.isFinite));assert.ok(b.x>=r.viewport.left&&b.x+b.w<=r.viewport.right+.001);}
- const fill=r.draws.find(d=>d.kind==='fill');assert.ok(Math.abs(fill.args[0]-12*g.u)<1e-8);assert.ok(Math.abs(fill.args[1]-12*g.u)<1e-8);
+ const fill=r.draws.find(d=>d.kind==='fill'&&Math.abs(d.args[0]-12*g.u)<1e-8&&Math.abs(d.args[1]-12*g.u)<1e-8);assert.ok(fill,'Match HUD respects the shifted viewport');assert.ok(Math.abs(fill.args[0]-12*g.u)<1e-8);assert.ok(Math.abs(fill.args[1]-12*g.u)<1e-8);
  const created=g.labels.length;g.refresh();g.refresh();assert.equal(g.labels.length,created);
 });
 test('native pointer input plots a route and playback reaches the same ghost endpoint',()=>{
@@ -173,4 +173,25 @@ test('title and tutorial menus fit a narrow viewport',()=>{
  const g=new Sunday(runtime({width:960,height:2000,left:130,top:-600,cssScale:.375}));click(g,'TUTORIALS');
  for(const b of g.buttons)assert.ok(b.x>=g.v.left&&b.x+b.w<=g.v.right&&b.y>=g.v.top&&b.y+b.h<=g.v.bottom);
  g.key({key:'5'});assert.equal(g.practice.index,4);click(g,'EXIT');assert.equal(g.menuPage,'tutorials');assert.equal(g.intro,true);
+});
+
+function tapGoal(g,x){
+ const q=g.point({x,z:-47}),[clientX,clientY]=g.field.layerToCssPx(q.x,q.y),ev={pointerId:1,button:0,clientX,clientY};
+ g.pointerDown(ev);g.pointerUp(ev);
+}
+test('shot targeting is a continuous goal-mouth choice, not high versus low, in both orientations',()=>{
+ for(const opts of [{},{width:960,height:2000,cssScale:.375}]){
+  const g=new Sunday(runtime(opts));click(g,'NEW CAREER');g.run.state.actors[0].x=4;g.run.state.actors[0].z=-36;g.run.state.ball={x:4.5,z:-37,y:.6};g.run.intents=g.run.makeIntents();g.updateActors();g.refresh();
+  click(g,'SHOOT');assert.ok(g.buttons.some(b=>b.label.text==='NEAR'));assert.ok(!g.buttons.some(b=>['HIGH','LOW','LEFT','RIGHT'].includes(b.label.text)));
+  tapGoal(g,-2.7);assert.equal(g.order.kind,'shot');assert.ok(Math.abs(g.order.target.x+2.7)<1e-8);assert.equal(g.preview.valid,true);
+  tapGoal(g,1.25);assert.ok(Math.abs(g.order.target.x-1.25)<1e-8);
+  click(g,'NEAR');assert.equal(g.order.target.x,5.8);click(g,'FAR');assert.equal(g.order.target.x,-5.8);click(g,'CENTRE');assert.equal(g.order.target.x,0);
+  g.run.state.actors[0].x=-4;g.refresh();click(g,'NEAR');assert.equal(g.order.target.x,-5.8);
+ }
+});
+test('shooting mode ignores grass taps and keeps an impossible shot visibly invalid',()=>{
+ const g=new Sunday(runtime());click(g,'NEW CAREER');click(g,'SHOOT');
+ const p=g.point({x:0,z:0}),[clientX,clientY]=g.field.layerToCssPx(p.x,p.y),ev={pointerId:1,button:0,clientX,clientY};g.pointerDown(ev);g.pointerUp(ev);
+ assert.equal(g.targetMode,'shot');assert.equal(g.order,null);
+ tapGoal(g,0);assert.equal(g.order.kind,'shot');assert.equal(g.preview.valid,false);assert.ok(!g.buttons.find(b=>b.label.text==='PLAY 2s').enabled);
 });
