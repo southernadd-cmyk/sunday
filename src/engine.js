@@ -3,6 +3,8 @@ export const BEAT=2, STEPS=60, ACTORS=20, STRIDE=43;
 export const GOAL={z:-47,left:-6.1,right:6.1};
 export const BOUNDS={left:-34,right:34,top:-44.5,bottom:36};
 export const PASS_RANGE=32;
+export const ACTION_TIMES=Object.freeze([.5,1,1.5,2]);
+const validTime=t=>Number.isFinite(t)&&t>=.1&&t<=BEAT;
 export const HOME_IDS=Object.freeze([0,1,2,3,4,5,6,15]);
 export const isHome=id=>HOME_IDS.includes(id);
 export const FIXTURES=[
@@ -132,7 +134,7 @@ export class Run{
   }
   if(order.kind==='pass'){
    if(!isHome(order.ally)||order.ally===owner)return {error:'Pick another red shirt to pass to.'};
-   if(distance(holder,this.state.actors[order.ally])>PASS_RANGE)return {error:`That pass is too far. Find a teammate within ${PASS_RANGE}m.`};
+   if(order.receiveAt==null&&distance(holder,this.state.actors[order.ally])>PASS_RANGE)return {error:`That pass is too far. Find a teammate within ${PASS_RANGE}m.`};
   }
   if(order.kind==='call'){
    if(owner===actor)return {error:'This player already has the ball.'};
@@ -141,7 +143,26 @@ export class Run{
   const budget=this.runRange+(burst?7:0)+(order.kind==='one-two'?2:0),path=route(player,order.path,budget);
   if(path.length<2&&!['pass','call'].includes(order.kind)&&!(order.kind==='run'&&Object.keys(support).length))return {error:'Click the grass to choose your run.'};
   if(order.kind==='call'&&distance(holder,along(path,budget*.8))>PASS_RANGE)return {error:'That return run is too far from the ball. Choose a closer spot.'};
-  return {kind:order.kind,actor,support,path,budget,burst:burst&&path.length>1,ally:order.ally};
+  const clean={kind:order.kind,actor,support,path,budget,burst:burst&&path.length>1,ally:order.ally};
+  if(order.kind==='pass'&&order.receiveAt!=null){
+   if(actor!==owner)return {error:'Select the ball carrier to time a pass.'};
+   if(!validTime(order.receiveAt))return {error:'Choose an arrival time within the two-second turn.'};
+   const receiveStep=Math.round(order.receiveAt/BEAT*STEPS),fraction=receiveStep/STEPS;
+   const receiver=this.state.actors[order.ally];
+   const p=support[order.ally]?along(support[order.ally],this.runRange*fraction):lerp(receiver,this.intents[order.ally],fraction);
+   const target={x:p.x+.5,z:p.z-1,y:.6};
+   let best=null;
+   for(let step=0;step<receiveStep;step++){
+    const f=step/STEPS,a=along(path,budget*f),from=step===0?{...this.state.ball}:{x:a.x+.5,z:a.z-1,y:.6};
+    const length=distance(from,target),duration=(receiveStep-step)/STEPS*BEAT,speed=length/duration;
+    if(length>PASS_RANGE||speed>38||speed<7)continue;
+    const cost=Math.abs(speed-28)+step*.025;
+    if(!best||cost<best.cost)best={from,target,releaseStep:step,receiveStep,speed,cost};
+   }
+   if(!best)return {error:'That reception is out of reach at this time. Pick another point on the run.'};
+   clean.receiveAt=receiveStep/STEPS*BEAT;clean.delivery=best;
+  }
+  return clean;
  }
  suggestOneTwo(ally,{burst=false,actor=0,support={}}={}){
   if(!isHome(actor)||!isHome(ally)||ally===actor||this.state.ballOwner!==actor)return null;
@@ -162,7 +183,7 @@ export class Run{
  preview(order){
   const clean=this.normalise(order);if(clean.error)return {valid:false,error:clean.error};
   const r=this.simulate(clean,false);
-  return {valid:true,order:clean,type:r.type,hit:r.hit,point:r.point,detail:r.detail,end:r.end.actors[clean.actor],ball:r.end.ball,ballOwner:r.end.ballOwner,passPoints:r.passPoints};
+  return {valid:true,order:clean,type:r.type,hit:r.hit,point:r.point,detail:r.detail,end:r.end.actors[clean.actor],ball:r.end.ball,ballOwner:r.end.ballOwner,passPoints:r.passPoints,delivery:clean.delivery,tacklePoint:r.tacklePoint,tackleOutcome:r.tackleOutcome};
  }
  simulate(order,record=false){
   const start=this.state,actor=order.actor??0,positions=start.actors.map(a=>({...a})),origin={...start.actors[actor]},end=clone(start);
@@ -174,12 +195,12 @@ export class Run{
   const firstPass=order.kind==='one-two'?foot(positionAt(order.ally,.3)):null;
   const returnPoint=['one-two','call'].includes(order.kind)?foot(along(order.path,order.budget*.8)):null;
   let passTime=0,passTarget=null;
-  if(order.kind==='pass'){
+  if(order.kind==='pass'&&!order.delivery){
    passTime=distance(start.ball,foot(start.actors[order.ally]))/28;
    for(let i=0;i<4;i++){passTarget=foot(positionAt(order.ally,Math.min(1,passTime/BEAT)));passTime=distance(start.ball,passTarget)/28;}
   }
   const callStart=order.kind==='call'?foot(positionAt(start.ballOwner,.2)):null;
-  const passPoints=order.kind==='pass'?[start.ball,passTarget]:order.kind==='call'?[callStart,returnPoint]:order.kind==='one-two'?[start.ball,firstPass,returnPoint]:null;
+  const passPoints=order.kind==='pass'?(order.delivery?[order.delivery.from,order.delivery.target]:[start.ball,passTarget]):order.kind==='call'?[callStart,returnPoint]:order.kind==='one-two'?[start.ball,firstPass,returnPoint]:null;
   for(let step=0;step<=STEPS;step++){
    const f=step/STEPS,time=f*BEAT;
    for(let i=0;i<ACTORS;i++)Object.assign(positions[i],positionAt(i,f));
@@ -189,6 +210,11 @@ export class Run{
     const progress=Math.min(1,time/travelTime);ball={...lerp(start.ball,order.target,progress),y:.6+(order.chip?Math.sin(progress*Math.PI)*7:Math.sin(progress*Math.PI)*.7)};
    }else if(order.kind==='one-two'&&f<.8){
     ball=f<=.3?{...lerp(start.ball,firstPass,f/.3),y:.6}:{...lerp(firstPass,returnPoint,(f-.3)/.5),y:.6};inFlight=true;owner=f<.3?start.ballOwner:order.ally;
+   }else if(order.kind==='pass'&&order.delivery){
+    const d=order.delivery;
+    if(step<d.releaseStep)ball=step===0?{...start.ball}:foot(positions[owner]);
+    else if(step<d.receiveStep){ball={...lerp(d.from,d.target,(step-d.releaseStep)/(d.receiveStep-d.releaseStep)),y:.6};inFlight=true;}
+    else{owner=order.ally;ball=foot(positions[owner]);}
    }else if(order.kind==='pass'){
     if(time<passTime){ball={...lerp(start.ball,passTarget,time/passTime),y:.6};inFlight=true;}else{owner=order.ally;ball=foot(positions[owner]);}
    }else if(order.kind==='call'&&f<.8){
@@ -265,7 +291,7 @@ export class MatchRun extends Run{
  selection(){return this.defending?nearest(HOME_IDS,this.state.actors,this.state.ball):this.state.ballOwner;}
  newAttack(){
   super.newAttack();
-  Object.assign(this.state,{scoreFor:0,scoreAgainst:0,beats:16+this.fixtureIndex*2,extra:false,defended:false,engaged:false,counter:0,regains:0});
+  Object.assign(this.state,{scoreFor:0,scoreAgainst:0,beats:16+this.fixtureIndex*2,extra:false,defended:false,engaged:false,counter:0,regains:0,tackleRecovery:{},freeKick:false,fouls:0});
   if(this.fixtureIndex>0)this.kickoff(false);else this.intents=this.makeIntents();
   this.message=this.defending?'They have the ball. Cut off the attack, then hit back.':'Build an attack. If you lose it, win it back.';
  }
@@ -275,7 +301,7 @@ export class MatchRun extends Run{
   const h=[[-8,-10],[-23,-19],[22,-19],[8,5],[-19,22],[20,20],[0,31]],a=[[5,1],[-20,12],[19,13],[-8,-15],[20,-28],[-20,-29],[0,-35]];
   for(let i=0;i<7;i++){Object.assign(s.actors[i],{x:h[i][0]*m,z:h[i][1]});Object.assign(s.actors[i+7],{x:a[i][0]*m,z:a[i][1]});}
   Object.assign(s.actors[14],{x:0,z:-45});Object.assign(s.actors[15],{x:0,z:45});
-  s.ballOwner=home?0:7;Object.assign(s.actors[s.ballOwner],{x:home?-3:3,z:0});s.ball=foot(s.actors[s.ballOwner]);s.lastMove={x:0,z:-1};s.counter=0;
+  s.ballOwner=home?0:7;Object.assign(s.actors[s.ballOwner],{x:home?-3:3,z:0});s.ball=foot(s.actors[s.ballOwner]);s.lastMove={x:0,z:-1};s.counter=0;s.freeKick=false;
   this.activate(s);this.intents=this.makeIntents();
  }
  makeIntents(){
@@ -302,28 +328,43 @@ export class MatchRun extends Run{
   const k=s.actors[15];ints[15]={...toward(k,{x:clamp(h.x*.45,-4.5,4.5),z:44.8},4),id:15};
   const goal={x:k.x>=0?-5.5:5.5,z:48};
   const from={...s.ball};
-  if(h.z>=24&&owner!==14&&distance(h,goal)<=28){this.threat={kind:'shot',from,target:goal,owner,detail:'Shot incoming. Block the orange line or cover the goal.'};return ints;}
+  if((h.z>=24||s.freeKick&&h.z>=19)&&owner!==14&&distance(h,goal)<=30){this.threat={kind:'shot',from,target:goal,owner,detail:'Shot incoming. Block the orange line or cover the goal.'};return ints;}
   const options=AWAY.filter(i=>i!==owner&&i!==14).map(id=>{
    const target=foot(lerp(s.actors[id],ints[id],.65)),d=distance(s.actors[nearest(HOME_IDS,s.actors,target)],target);
    return {id,target,score:(target.z-h.z)*.75+d*.8,forward:target.z-h.z,range:distance(from,target)};
   }).filter(o=>o.range>=6&&o.range<=30&&o.forward>=3).sort((a,b)=>b.score-a.score);
   const defender=s.actors[nearest(HOME_IDS,s.actors,h)];
-  if(options.length&&(owner===14||distance(defender,h)<7||this.fixtureIndex===2&&s.beats%2===0)){
+  if(options.length&&(s.freeKick||owner===14||distance(defender,h)<7||this.fixtureIndex===2&&s.beats%2===0)){
    const {id,target}=options[0];this.threat={kind:'pass',from,target,owner,receiver:id,detail:'Pass incoming. Cut the orange lane or mark the receiver.'};return ints;
   }
+  if(s.freeKick){const id=AWAY.filter(i=>i!==owner&&i!==14).sort((a,b)=>distance(s.actors[a],h)-distance(s.actors[b],h))[0];this.threat={kind:'pass',from,target:foot(lerp(s.actors[id],ints[id],.65)),owner,receiver:id,detail:'Free kick. Cover the passing lane.'};return ints;}
   const dest=pitchToward(h,{x:h.x+(defender.x<=h.x?4:-4),z:Math.min(37,h.z+speed+1)},speed);
   ints[owner]={...dest,id:owner};this.threat={kind:'dribble',from,target:foot(dest),owner,detail:'They are driving forward. Press or cover the space.'};return ints;
  }
  normalise(order){
   if(!this.defending&&order?.kind!=='hold')return super.normalise(order);
-  if(this.phase!=='planning'||!order||!['run','hold'].includes(order.kind))return {error:'Select a defender and plan a run or hold.'};
+  if(this.phase!=='planning'||!order||!['run','hold','tackle'].includes(order.kind))return {error:'Select a defender and plan a run or hold.'};
   const actor=order.actor??this.selection();if(!isHome(actor))return {error:'Select a home player.'};
   const burst=!!order.burst;if(burst&&this.state.bursts<1)return {error:'No sprints left in this match.'};
-  const budget=this.runRange+(burst?7:0),support={};
-  for(const [key,points] of Object.entries(order.support||{})){const id=Number(key);if(isHome(id)&&id!==actor&&Array.isArray(points)){const p=route(this.state.actors[id],points,this.runRange);if(p.length>1)support[id]=p;}}
+  const recovery=this.state.tackleRecovery||{},range=id=>this.runRange*(recovery[id]>0?.5:1);
+  const budget=range(actor)+(burst?7:0),support={};
+  for(const [key,points] of Object.entries(order.support||{})){const id=Number(key);if(isHome(id)&&id!==actor&&Array.isArray(points)){const p=route(this.state.actors[id],points,range(id));if(p.length>1)support[id]=p;}}
   const path=route(this.state.actors[actor],order.path||[],budget);
   if(order.kind==='run'&&path.length<2&&!Object.keys(support).length)return {error:'Tap grass to plan a run, or choose HOLD.'};
+  if(order.kind==='tackle'){
+   if(actor===15)return {error:'The keeper saves by covering the ball. Select an outfielder to tackle.'};
+   if(recovery[actor]>0)return {error:'This player is recovering from a challenge. Choose another defender.'};
+   if(!['stand','slide'].includes(order.tackle)||!validTime(order.tackleAt))return {error:'Choose a tackle type and time.'};
+   return {kind:'tackle',actor,path,support,budget,burst:burst&&path.length>1,tackle:order.tackle,tackleAt:Math.round(order.tackleAt/BEAT*STEPS)/STEPS*BEAT};
+  }
   return {kind:'run',actor,path,support,budget,burst:burst&&path.length>1};
+ }
+ tacklePointAt(time){
+  const t=this.threat;if(!t)return null;
+  const f=clamp(time/BEAT,0,1);
+  if(t.kind==='dribble')return lerp(t.from,t.target,f);
+  if(t.kind==='pass'&&f>=.65)return foot(lerp(this.state.actors[t.receiver],this.intents[t.receiver],f));
+  return lerp(t.from,t.target,t.kind==='shot'?Math.min(1,time/(distance(t.from,t.target)/34)):f/.65);
  }
  defensivePoint(actor,cover=false){
   const t=this.threat;if(!t)return null;const a=this.state.actors[actor];
@@ -334,33 +375,52 @@ export class MatchRun extends Run{
  simulate(order,record=false){
   if(!this.defending){
    const r=super.simulate(order,record);
+   r.end.tackleRecovery=Object.fromEntries(Object.entries(this.state.tackleRecovery||{}).map(([id,n])=>[id,Math.max(0,n-1)]));
    if(['tackle','intercept','save'].includes(r.type)){r.end.ballOwner=r.hit;r.end.ball=foot(r.end.actors[r.hit]);r.type='turnover';r.detail='Possession lost. Recover your shape and win it back.';}
    else if(r.type==='whistle'){r.type='move';r.detail='The clock is up.';}
    return r;
   }
   const s=this.state,end=clone(s),positions=s.actors.map(a=>({...a})),actor=order.actor,t=this.threat;
   const frames=record?new Float32Array((STEPS+1)*STRIDE):null;
-  let ball={...s.ball},owner=s.ballOwner,type='move',detail='',hit=null,point=null,count=0;
+  let ball={...s.ball},owner=s.ballOwner,type='move',detail='',hit=null,point=null,count=0,tackleOutcome=null,tacklePoint=null;
+  const recovery=s.tackleRecovery||{},challengeStep=order.kind==='tackle'?Math.round(order.tackleAt/BEAT*STEPS):-1;
   const length=routeLength(order.path),flight=t.kind==='shot'?distance(t.from,t.target)/34:BEAT*.65;
   for(let step=0;step<=STEPS;step++){
    const f=step/STEPS,time=f*BEAT;
-   for(let i=0;i<ACTORS;i++)Object.assign(positions[i],order.support?.[i]?along(order.support[i],this.runRange*f):lerp(s.actors[i],this.intents[i],f));
+   for(let i=0;i<ACTORS;i++)Object.assign(positions[i],order.support?.[i]?along(order.support[i],this.runRange*(recovery[i]>0?.5:1)*f):lerp(s.actors[i],this.intents[i],f));
    Object.assign(positions[actor],along(order.path,Math.min(length,order.budget*f)));
    const flying=t.kind==='shot'||t.kind==='pass'&&time<flight;
    if(flying){const k=Math.min(1,time/flight);ball={...lerp(t.from,t.target,k),y:.6+(t.kind==='shot'?Math.sin(k*Math.PI)*.7:0)};}
    else{if(t.kind==='pass')owner=t.receiver;ball=foot(positions[owner]);}
    if(step>0){
-    for(const id of HOME_IDS){const radius=id===15?2.5+this.buffs.gloves:2.05+this.buffs.press;
-     if(distance(positions[id],ball)<radius&&ball.y<2.6){hit=id;point={x:ball.x,z:ball.z};owner=id;ball=foot(positions[id]);type='regain';detail=id===15?'Safe hands! Build from the back.':flying?'Interception! Break forward.':'Clean tackle! Now counter.';break;}}
+    // Blocks and interceptions are positional; challenges against a carrier are explicit.
+    if(!s.freeKick||step>=3)for(const id of HOME_IDS){
+     const radius=id===15?2.5+this.buffs.gloves:1.6+this.buffs.press;
+     if((flying||id===15)&&distance(positions[id],ball)<radius&&ball.y<2.6){
+      hit=id;point={x:ball.x,z:ball.z};owner=id;ball=foot(positions[id]);type='regain';detail=id===15?'Safe hands! Build from the back.':'Interception! Break forward.';break;
+     }
+    }
+    if(type==='move'&&step===challengeStep){
+     const a=positions[actor],carrier=positions[owner],slide=order.tackle==='slide',d=distance(a,ball),body=distance(a,carrier),behind=a.z<carrier.z-1.2;
+     tacklePoint={x:ball.x,z:ball.z};
+     if(flying||s.freeKick){tackleOutcome='miss';detail='Challenge mistimed: the ball is in flight or protected.';}
+     else if((slide&&behind&&body<=4.2)||(body<=2.6&&d>(slide?3.7:2.1)+this.buffs.press)){
+      tackleOutcome='foul';type='foul';point=tacklePoint;hit=actor;detail='Foul! They have a free kick. The defender must recover.';
+     }else if(d<=(slide?3.7:2.1)+this.buffs.press){
+      tackleOutcome='won';type='regain';point=tacklePoint;hit=actor;owner=actor;ball=foot(a);detail=slide?'Sliding tackle won! Break forward.':'Standing tackle won! Break forward.';
+     }else{tackleOutcome='miss';detail='Missed challenge. Recover your position.';}
+    }
     if(type==='move'&&t.kind==='shot'&&time>=flight){type='conceded';detail='They found the corner. Reset and respond.';}
    }
    if(frames){const o=count*STRIDE;for(let i=0;i<ACTORS;i++){frames[o+i*2]=positions[i].x;frames[o+i*2+1]=positions[i].z;}frames[o+ACTORS*2]=ball.x;frames[o+ACTORS*2+1]=ball.z;frames[o+ACTORS*2+2]=ball.y;}
    count++;if(type!=='move')break;
   }
-  Object.assign(end,{actors:positions,ball,ballOwner:owner,beats:s.beats-1,defended:true});
+  Object.assign(end,{actors:positions,ball,ballOwner:owner,beats:s.beats-1,defended:true,freeKick:type==='foul',tackleRecovery:Object.fromEntries(Object.entries(recovery).map(([id,n])=>[id,Math.max(0,n-1)]))});
+  if(tackleOutcome&&(order.tackle==='slide'||tackleOutcome!=='won'))end.tackleRecovery[actor]=1;
+  if(type==='foul')end.fouls=(s.fouls||0)+1;
   if(order.burst)end.bursts--;
   if(type==='regain'){end.regains++;end.counter=2;}
-  return {type,detail,hit,point,end,frames,count,duration:(count-1)/STEPS*BEAT,order,passPoints:t.kind==='dribble'?null:[t.from,t.target]};
+  return {type,detail,hit,point,end,frames,count,duration:(count-1)/STEPS*BEAT,order,passPoints:t.kind==='dribble'?null:[t.from,t.target],tacklePoint,tackleOutcome};
  }
  commit(order){
   const clean=this.normalise(order);if(clean.error)return {type:'invalid',detail:clean.error};
